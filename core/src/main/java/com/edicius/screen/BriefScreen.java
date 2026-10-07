@@ -36,6 +36,9 @@ public class BriefScreen extends ScreenAdapter {
         game.font.setColor(Color.WHITE);
         game.font.getData().setScale(1.1f);
         wrap(game.session.lastNyxLine, 80, 500, 36);
+        game.font.setColor(game.meta.chroma.tint);
+        game.font.draw(game.batch, "Shell: " + game.meta.selectedCharacterId
+                + "  ·  Chroma: " + game.meta.chroma.label, 80, 300);
         if (game.session.activeMutator != null) {
             game.font.setColor(Color.ORANGE);
             game.font.draw(game.batch, "Mutator: " + game.session.activeMutator.label, 80, 260);

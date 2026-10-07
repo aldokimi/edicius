@@ -21,6 +21,8 @@ public class Player {
     public int combo;
     public Facing facing = Facing.S;
     public boolean moving;
+    /** Degrees for Kenney-style top-down sprites (0 = east). */
+    public float aimAngleDeg;
 
     public WeaponKit weapon = WeaponKit.BOLT;
     public WeaponKit secondary = WeaponKit.SCATTER;
@@ -137,6 +139,12 @@ public class Player {
 
         tryMove(collision, vx * dt, 0f);
         tryMove(collision, 0f, vy * dt);
+
+        float adx = cmd.aimWorldX() - x;
+        float ady = cmd.aimWorldY() - y;
+        if (adx * adx + ady * ady > 0.001f) {
+            aimAngleDeg = (float) Math.toDegrees(Math.atan2(ady, adx));
+        }
 
         if (cmd.fire() && fireCooldown <= 0f) {
             fire(cmd.aimWorldX(), cmd.aimWorldY(), world);

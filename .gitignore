@@ -15,3 +15,8 @@ projectGame.iml
 
 # app backup files
 bin
+
+# Large unpacked source packs (runtime/ is what the game loads)
+assets/packs/_dl/
+assets/packs/kenney-particles/
+assets/packs/kenney-topdown/

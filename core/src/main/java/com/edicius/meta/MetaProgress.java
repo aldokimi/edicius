@@ -2,6 +2,7 @@ package com.edicius.meta;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
+import com.edicius.gfx.ChromaPreset;
 import com.edicius.run.PlayerLoadout;
 import com.edicius.sim.CombatBalance;
 import com.edicius.sim.WeaponKit;
@@ -25,6 +26,8 @@ public class MetaProgress {
     public boolean beamUnlocked;
     public boolean tutorialSeen;
     public String cosmeticTrail = "cyan";
+    public String selectedCharacterId = "cipher";
+    public ChromaPreset chroma = ChromaPreset.CYAN;
     public final Set<String> codex = new HashSet<>();
     public final Leaderboard leaderboard = new Leaderboard();
     public final DeathLog deathLog = new DeathLog();
@@ -44,6 +47,8 @@ public class MetaProgress {
         m.beamUnlocked = p.getBoolean("beam", false) || m.act2Clear;
         m.tutorialSeen = p.getBoolean("tutorial", false);
         m.cosmeticTrail = p.getString("trail", "cyan");
+        m.selectedCharacterId = p.getString("character", "cipher");
+        m.chroma = ChromaPreset.fromId(p.getString("chroma", ChromaPreset.CYAN.name()));
         String codexRaw = p.getString("codex", "");
         if (!codexRaw.isBlank()) {
             for (String id : codexRaw.split(",")) {
@@ -71,6 +76,8 @@ public class MetaProgress {
         p.putBoolean("beam", beamUnlocked);
         p.putBoolean("tutorial", tutorialSeen);
         p.putString("trail", cosmeticTrail);
+        p.putString("character", selectedCharacterId);
+        p.putString("chroma", chroma.name());
         p.putString("codex", String.join(",", codex));
         leaderboard.save(p);
         deathLog.save(p);
@@ -147,11 +154,13 @@ public class MetaProgress {
     }
 
     public void cycleCosmetic() {
-        cosmeticTrail = switch (cosmeticTrail) {
-            case "cyan" -> "magenta";
-            case "magenta" -> "gold";
-            default -> "cyan";
-        };
+        chroma = chroma.next();
+        cosmeticTrail = chroma.name().toLowerCase();
+        save();
+    }
+
+    public void selectCharacter(String id) {
+        selectedCharacterId = id;
         save();
     }
 

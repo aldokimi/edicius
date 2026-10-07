@@ -10,6 +10,7 @@ public class Enemy {
     public static final float HALF_H = 18f;
     public com.edicius.gfx.Facing facing = com.edicius.gfx.Facing.S;
     public boolean moving;
+    public float aimAngleDeg;
     public static final float SHOOT_RANGE = 400f;
     public static final float ENEMY_SHOT_SPEED = 380f;
 
@@ -111,6 +112,9 @@ public class Enemy {
         float pdx = player.x - x;
         float pdy = player.y - y;
         float dist = (float) Math.sqrt(pdx * pdx + pdy * pdy);
+        if (dist > 0.001f) {
+            aimAngleDeg = (float) Math.toDegrees(Math.atan2(pdy, pdx));
+        }
 
         contactCooldown = Math.max(0f, contactCooldown - dt);
         if (dist < 28f * scale && contactCooldown <= 0f) {

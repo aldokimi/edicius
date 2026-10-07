@@ -11,6 +11,7 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import com.edicius.EdiciusGame;
 import com.edicius.input.GameInput;
 import com.edicius.input.InputCommand;
+import com.edicius.gfx.BiomePalette;
 import com.edicius.render.HudRenderer;
 import com.edicius.render.WorldRenderer;
 import com.edicius.sim.Player;
@@ -108,7 +109,17 @@ public class RunScreen extends ScreenAdapter {
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
         worldViewport.apply();
-        worldRenderer.render(game.batch, shapes, worldCamera, world, delta, game.meta.cosmeticTrail);
+        String chapterId = game.session.chapter != null ? game.session.chapter.id : null;
+        worldRenderer.render(
+                game.batch,
+                shapes,
+                worldCamera,
+                world,
+                delta,
+                game.meta.selectedCharacterId,
+                game.meta.chroma,
+                BiomePalette.forChapter(chapterId)
+        );
 
         hudViewport.apply();
         shapes.setProjectionMatrix(hudCamera.combined);

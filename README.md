@@ -51,6 +51,10 @@ Output: `lwjgl3/build/dist/` (jar + `assets/`). Run the jar with the `assets` fo
 3. **Endless** — unlock after Act 3  
 4. **Meta tree** — spend protocol points  
 5. **Codex** — lore unlocks  
+6. **Protocol shells / chroma** — pick from 6 character shells + 6 color presets (cosmetics)
+
+Art credits: see `assets/CREDITS.md` (Kenney CC0 runtime cast; pipeline ready for CHROME DISTRICT drop-in).  
+
 
 ## Develop
 

@@ -47,10 +47,12 @@ public class MainMenuScreen extends ScreenAdapter {
         game.font.draw(game.batch, "3  Endless Protocol" + (game.meta.endlessUnlocked ? "" : " (clear Act 3)"), 80, 420);
         game.font.draw(game.batch, "4  Meta / Protocol tree", 80, 380);
         game.font.draw(game.batch, "5  Codex", 80, 340);
+        game.font.draw(game.batch, "6  Protocol shells / chroma", 80, 300);
         game.font.setColor(Color.LIGHT_GRAY);
-        game.font.draw(game.batch, "Points: " + game.meta.protocolPoints
-                + "   Trail: " + game.meta.cosmeticTrail
-                + "   M mute", 80, 280);
+        game.font.draw(game.batch, "Shell: " + game.meta.selectedCharacterId
+                + "   Chroma: " + game.meta.chroma.label
+                + "   Points: " + game.meta.protocolPoints
+                + "   M mute", 80, 250);
         if (status != null && !status.isBlank()) {
             game.font.setColor(Color.ORANGE);
             game.font.draw(game.batch, status, 80, 230);
@@ -66,15 +68,21 @@ public class MainMenuScreen extends ScreenAdapter {
         if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_1) || Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
             game.setScreen(new ChapterSelectScreen(game));
         } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_2)) {
-            game.session = RunSession.daily(game.meta.createLoadout(), DailySeed.today());
-            game.setScreen(new BriefScreen(game));
+            game.setScreen(new CharacterSelectScreen(game, () -> {
+                game.session = RunSession.daily(game.meta.createLoadout(), DailySeed.today());
+                game.setScreen(new BriefScreen(game));
+            }));
         } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_3) && game.meta.endlessUnlocked) {
-            game.session = RunSession.endless(game.meta.createLoadout(), System.nanoTime());
-            game.setScreen(new BriefScreen(game));
+            game.setScreen(new CharacterSelectScreen(game, () -> {
+                game.session = RunSession.endless(game.meta.createLoadout(), System.nanoTime());
+                game.setScreen(new BriefScreen(game));
+            }));
         } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_4)) {
             game.setScreen(new MetaScreen(game));
         } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_5)) {
             game.setScreen(new CodexScreen(game));
+        } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_6)) {
+            game.setScreen(new CharacterSelectScreen(game, () -> game.setScreen(new MainMenuScreen(game))));
         }
     }
 }

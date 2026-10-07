@@ -44,8 +44,11 @@ public class ChapterSelectScreen extends ScreenAdapter {
 
         for (int i = 0; i < chapters.size(); i++) {
             if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_1 + i) && game.meta.chapterUnlocked(chapters.get(i).id)) {
-                game.session = RunSession.campaign(chapters.get(i), game.meta.createLoadout(), System.nanoTime());
-                game.setScreen(new BriefScreen(game));
+                final var chapter = chapters.get(i);
+                game.setScreen(new CharacterSelectScreen(game, () -> {
+                    game.session = RunSession.campaign(chapter, game.meta.createLoadout(), System.nanoTime());
+                    game.setScreen(new BriefScreen(game));
+                }));
                 return;
             }
         }

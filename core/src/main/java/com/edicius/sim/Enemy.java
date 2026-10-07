@@ -8,6 +8,8 @@ public class Enemy {
 
     public static final float HALF_W = 12f;
     public static final float HALF_H = 18f;
+    public com.edicius.gfx.Facing facing = com.edicius.gfx.Facing.S;
+    public boolean moving;
     public static final float SHOOT_RANGE = 400f;
     public static final float ENEMY_SHOT_SPEED = 380f;
 
@@ -95,9 +97,15 @@ public class Enemy {
                 float move = role.moveSpeed * speedMul;
                 float vx = dx / len * move;
                 float vy = dy / len * move;
+                facing = com.edicius.gfx.Facing.fromVector(dx, dy);
+                moving = true;
                 tryMove(collision, vx * dt, 0f);
                 tryMove(collision, 0f, vy * dt);
+            } else {
+                moving = false;
             }
+        } else {
+            moving = false;
         }
 
         float pdx = player.x - x;
@@ -107,7 +115,7 @@ public class Enemy {
         contactCooldown = Math.max(0f, contactCooldown - dt);
         if (dist < 28f * scale && contactCooldown <= 0f) {
             player.damage(role.contactDamage);
-            contactCooldown = 0.45f;
+            contactCooldown = CombatBalance.CONTACT_COOLDOWN;
         }
 
         if (role.shootInterval > 0f) {
@@ -147,8 +155,8 @@ public class Enemy {
     private void useAbility(World world, Player player) {
         switch (role) {
             case WARDEN -> {
-                world.addTelegraph(new Telegraph(player.x, player.y, 70f, 0.85f, 28));
-                abilityCooldown = 2.4f;
+                world.addTelegraph(new Telegraph(player.x, player.y, 70f, CombatBalance.WARDEN_TELEGRAPH, 24));
+                abilityCooldown = 2.6f;
             }
             case ECHO -> {
                 world.addTelegraph(new Telegraph(x, y, 90f, 0.7f, 22));

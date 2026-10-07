@@ -13,7 +13,10 @@ import java.util.Random;
 
 public class World {
 
-    public static final int ENEMY_SHOT_DAMAGE = 10;
+    public static final int ENEMY_SHOT_DAMAGE = CombatBalance.ENEMY_SHOT_DAMAGE;
+    public boolean eventRoomClear;
+    public boolean eventHitConfirm;
+    private boolean clearEventArmed;
 
     private final TileMap map;
     private final GridCollision collision;
@@ -119,6 +122,7 @@ public class World {
     }
 
     public void update(InputCommand cmd, float dt) {
+        eventHitConfirm = false;
         if (cmd.pauseToggle()) {
             paused = !paused;
         }
@@ -142,6 +146,12 @@ public class World {
 
         if (!player.isAlive()) {
             playerDead = true;
+        }
+        if (cleared && !clearEventArmed) {
+            eventRoomClear = true;
+            clearEventArmed = true;
+        } else {
+            eventRoomClear = false;
         }
     }
 
@@ -228,6 +238,7 @@ public class World {
                         enemy.damage(shot.damage);
                         shot.dead = true;
                         bursts.add(new VfxBurst(enemy.x, enemy.y, 0.2f, 1f, 0.85f, 0.2f));
+                        eventHitConfirm = true;
                         if (enemy.dead) {
                             player.registerKill();
                             bursts.add(new VfxBurst(enemy.x, enemy.y, 0.45f, 0.3f, 1f, 0.9f));

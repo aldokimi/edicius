@@ -1,23 +1,26 @@
 package com.edicius.sim;
 
+import com.edicius.gfx.Facing;
 import com.edicius.input.InputCommand;
 
 public class Player {
 
     public static final float HALF_W = 12f;
     public static final float HALF_H = 18f;
-    public static final float BASE_SPEED = 240f;
-    public static final float DASH_DISTANCE = 220f;
-    public static final float DASH_DURATION = 0.12f;
+    public static final float BASE_SPEED = CombatBalance.PLAYER_SPEED;
+    public static final float DASH_DISTANCE = CombatBalance.DASH_DISTANCE;
+    public static final float DASH_DURATION = CombatBalance.DASH_DURATION;
 
     public float x;
     public float y;
-    public int maxHp = 100;
-    public int hp = 100;
+    public int maxHp = CombatBalance.PLAYER_MAX_HP;
+    public int hp = CombatBalance.PLAYER_MAX_HP;
     public int kills;
     public float styleScore;
     public float comboTimer;
     public int combo;
+    public Facing facing = Facing.S;
+    public boolean moving;
 
     public WeaponKit weapon = WeaponKit.BOLT;
     public WeaponKit secondary = WeaponKit.SCATTER;
@@ -26,6 +29,10 @@ public class Player {
     public float damageMul = 1f;
     public float moveMul = 1f;
     public float dashMul = 1f;
+
+    public boolean eventDash;
+    public boolean eventShoot;
+    public boolean eventHurt;
 
     private float dashTimeLeft;
     private float dashVx;
@@ -45,6 +52,12 @@ public class Player {
         return hp > 0;
     }
 
+    public void clearEvents() {
+        eventDash = false;
+        eventShoot = false;
+        eventHurt = false;
+    }
+
     public void damage(int amount) {
         if (isInvulnerable() || amount <= 0) {
             return;
@@ -52,6 +65,7 @@ public class Player {
         hp = Math.max(0, hp - amount);
         combo = 0;
         comboTimer = 0f;
+        eventHurt = true;
     }
 
     public void registerKill() {
@@ -62,6 +76,7 @@ public class Player {
     }
 
     public void update(InputCommand cmd, GridCollision collision, float dt, World world) {
+        clearEvents();
         fireCooldown = Math.max(0f, fireCooldown - dt);
         if (comboTimer > 0f) {
             comboTimer -= dt;
@@ -97,6 +112,8 @@ public class Player {
             dashVy = dy * speed;
             dashTimeLeft = DASH_DURATION;
             styleScore += 1.5f;
+            eventDash = true;
+            facing = Facing.fromVector(dx, dy);
         }
 
         float vx;
@@ -105,10 +122,17 @@ public class Player {
             vx = dashVx;
             vy = dashVy;
             dashTimeLeft -= dt;
+            moving = true;
         } else {
             float speed = BASE_SPEED * moveMul;
             vx = cmd.moveX() * speed;
             vy = cmd.moveY() * speed;
+            moving = vx != 0f || vy != 0f;
+            if (moving) {
+                facing = Facing.fromVector(cmd.moveX(), cmd.moveY());
+            } else {
+                facing = Facing.fromVector(cmd.aimWorldX() - x, cmd.aimWorldY() - y);
+            }
         }
 
         tryMove(collision, vx * dt, 0f);
@@ -117,6 +141,7 @@ public class Player {
         if (cmd.fire() && fireCooldown <= 0f) {
             fire(cmd.aimWorldX(), cmd.aimWorldY(), world);
             fireCooldown = weapon.cooldown / Math.max(0.2f, fireRateMul);
+            eventShoot = true;
         }
     }
 
@@ -131,6 +156,7 @@ public class Player {
         }
         float dirX = adx / len;
         float dirY = ady / len;
+        facing = Facing.fromVector(dirX, dirY);
         int damage = Math.round(weapon.damage * damageMul * world.getPlayerDamageMul());
         float speed = weapon.shotSpeed * world.getProjectileSpeedMul();
 

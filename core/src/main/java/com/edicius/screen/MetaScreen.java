@@ -33,16 +33,18 @@ public class MetaScreen extends ScreenAdapter {
         game.font.draw(game.batch, "4 Utility  " + game.meta.utility, 80, 400);
         game.font.draw(game.batch, "5 Cycle cosmetic trail (" + game.meta.cosmeticTrail + ")", 80, 360);
         game.font.setColor(Color.ORANGE);
-        game.font.draw(game.batch, "Local leaderboard", 80, 300);
+        game.font.draw(game.batch, "Local leaderboard (Phase-7 ready client)", 80, 300);
         float y = 260;
         game.font.setColor(Color.LIGHT_GRAY);
-        for (Leaderboard.Entry e : game.meta.leaderboard.top()) {
+        for (Leaderboard.Entry e : game.leaderboards.top()) {
             game.font.draw(game.batch, e.label + "  score " + e.score + "  seed " + e.seed, 100, y);
-            y -= 24;
-            if (y < 80) {
+            y -= 22;
+            if (y < 140) {
                 break;
             }
         }
+        game.font.setColor(Color.GRAY);
+        game.font.draw(game.batch, "Death log rooms: " + game.meta.deathLog.snapshot().size(), 80, 110);
         game.font.draw(game.batch, "ESC back", 80, 40);
         game.batch.end();
 

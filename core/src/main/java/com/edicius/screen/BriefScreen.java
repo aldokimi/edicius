@@ -20,15 +20,25 @@ public class BriefScreen extends ScreenAdapter {
         Gdx.gl.glClearColor(0.03f, 0.04f, 0.09f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         game.batch.begin();
+        if (game.assets.menuBg != null) {
+            game.batch.setColor(0.35f, 0.25f, 0.55f, 0.45f);
+            game.batch.draw(game.assets.menuBg, 0, 0, 1280, 720);
+            game.batch.setColor(Color.WHITE);
+        }
         game.font.setColor(Color.MAGENTA);
-        game.font.getData().setScale(1.4f);
+        game.font.getData().setScale(1.6f);
         game.font.draw(game.batch, "NYX // BRIEF", 80, 620);
+        if (game.session.chapter != null) {
+            game.font.setColor(Color.CYAN);
+            game.font.getData().setScale(1.2f);
+            game.font.draw(game.batch, game.session.chapter.name, 80, 570);
+        }
         game.font.setColor(Color.WHITE);
         game.font.getData().setScale(1.1f);
-        wrap(game.session.lastNyxLine, 80, 540, 40);
+        wrap(game.session.lastNyxLine, 80, 500, 36);
         if (game.session.activeMutator != null) {
             game.font.setColor(Color.ORANGE);
-            game.font.draw(game.batch, "Mutator: " + game.session.activeMutator.label, 80, 280);
+            game.font.draw(game.batch, "Mutator: " + game.session.activeMutator.label, 80, 260);
         }
         game.font.setColor(Color.CYAN);
         game.font.draw(game.batch, "ENTER — Drop in", 80, 180);
@@ -44,7 +54,7 @@ public class BriefScreen extends ScreenAdapter {
         StringBuilder line = new StringBuilder();
         float cy = y;
         for (String w : words) {
-            if (line.length() + w.length() > 70) {
+            if (line.length() + w.length() > 68) {
                 game.font.draw(game.batch, line.toString(), x, cy);
                 cy -= lineH;
                 line = new StringBuilder();

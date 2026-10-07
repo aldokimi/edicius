@@ -1,15 +1,15 @@
 package com.edicius.sim;
 
 public enum EnemyRole {
-    GRUNT(30, 0f, 160f, 12, false, false),
-    SHOOTER(40, 1.0f, 130f, 8, false, false),
-    SHIELDER(55, 0f, 110f, 10, true, false),
-    DRONE(25, 0.7f, 200f, 6, false, false),
-    PATCHER(45, 0f, 100f, 8, false, true),
-    HUNT_TARGET(70, 0.9f, 150f, 14, false, false),
-    WARDEN(420, 1.2f, 90f, 18, false, false),
-    ECHO(380, 0.85f, 120f, 12, false, false),
-    GRID_ROOT(600, 1.0f, 80f, 16, false, false);
+    GRUNT(28, 0f, 150f, 10, false, false),
+    SHOOTER(36, 1.15f, 120f, 7, false, false),
+    SHIELDER(50, 0f, 100f, 9, true, false),
+    DRONE(22, 0.85f, 190f, 5, false, false),
+    PATCHER(40, 0f, 95f, 7, false, true),
+    HUNT_TARGET(60, 1.0f, 145f, 12, false, false),
+    WARDEN(360, 1.35f, 85f, 14, false, false),
+    ECHO(340, 0.95f, 115f, 11, false, false),
+    GRID_ROOT(520, 1.1f, 75f, 13, false, false);
 
     public final int maxHp;
     public final float shootInterval;

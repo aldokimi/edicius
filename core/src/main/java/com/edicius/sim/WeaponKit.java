@@ -1,9 +1,9 @@
 package com.edicius.sim;
 
 public enum WeaponKit {
-    BOLT("Bolt Protocol", 0.18f, 620f, 22, 1, 0f),
-    SCATTER("Scatter Protocol", 0.35f, 520f, 12, 3, 14f),
-    BEAM("Beam Protocol", 0.08f, 900f, 8, 1, 0f);
+    BOLT("Bolt Protocol", 0.16f, 640f, 24, 1, 0f),
+    SCATTER("Scatter Protocol", 0.32f, 540f, 13, 3, 14f),
+    BEAM("Beam Protocol", 0.07f, 920f, 9, 1, 0f);
 
     public final String displayName;
     public final float cooldown;

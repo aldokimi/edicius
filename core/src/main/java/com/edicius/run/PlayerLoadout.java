@@ -1,11 +1,12 @@
 package com.edicius.run;
 
+import com.edicius.sim.CombatBalance;
 import com.edicius.sim.WeaponKit;
 
 public class PlayerLoadout {
 
-    public int maxHp = 100;
-    public int hp = 100;
+    public int maxHp = CombatBalance.PLAYER_MAX_HP;
+    public int hp = CombatBalance.PLAYER_MAX_HP;
     public float fireRateMul = 1f;
     public float damageMul = 1f;
     public float moveMul = 1f;

@@ -3,6 +3,7 @@ package com.edicius.meta;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Preferences;
 import com.edicius.run.PlayerLoadout;
+import com.edicius.sim.CombatBalance;
 import com.edicius.sim.WeaponKit;
 
 import java.util.HashSet;
@@ -22,9 +23,11 @@ public class MetaProgress {
     public boolean act3Clear;
     public boolean endlessUnlocked;
     public boolean beamUnlocked;
+    public boolean tutorialSeen;
     public String cosmeticTrail = "cyan";
     public final Set<String> codex = new HashSet<>();
     public final Leaderboard leaderboard = new Leaderboard();
+    public final DeathLog deathLog = new DeathLog();
 
     public static MetaProgress load() {
         MetaProgress m = new MetaProgress();
@@ -39,6 +42,7 @@ public class MetaProgress {
         m.act3Clear = p.getBoolean("act3", false);
         m.endlessUnlocked = p.getBoolean("endless", false) || m.act3Clear;
         m.beamUnlocked = p.getBoolean("beam", false) || m.act2Clear;
+        m.tutorialSeen = p.getBoolean("tutorial", false);
         m.cosmeticTrail = p.getString("trail", "cyan");
         String codexRaw = p.getString("codex", "");
         if (!codexRaw.isBlank()) {
@@ -49,6 +53,7 @@ public class MetaProgress {
             }
         }
         m.leaderboard.load(p);
+        m.deathLog.load(p);
         return m;
     }
 
@@ -64,9 +69,11 @@ public class MetaProgress {
         p.putBoolean("act3", act3Clear);
         p.putBoolean("endless", endlessUnlocked);
         p.putBoolean("beam", beamUnlocked);
+        p.putBoolean("tutorial", tutorialSeen);
         p.putString("trail", cosmeticTrail);
         p.putString("codex", String.join(",", codex));
         leaderboard.save(p);
+        deathLog.save(p);
         p.flush();
     }
 
@@ -99,7 +106,7 @@ public class MetaProgress {
 
     public PlayerLoadout createLoadout() {
         PlayerLoadout l = new PlayerLoadout();
-        l.maxHp = 100 + defense * 10;
+        l.maxHp = CombatBalance.PLAYER_MAX_HP + defense * 10;
         l.hp = l.maxHp;
         l.moveMul = 1f + mobility * 0.04f;
         l.dashMul = 1f + mobility * 0.04f;
@@ -145,6 +152,11 @@ public class MetaProgress {
             case "magenta" -> "gold";
             default -> "cyan";
         };
+        save();
+    }
+
+    public void markTutorialSeen() {
+        tutorialSeen = true;
         save();
     }
 }

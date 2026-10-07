@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
@@ -33,7 +34,7 @@ public class RunScreen extends ScreenAdapter {
     private static final float VIEW_H = UiTheme.VIEW_H;
 
     private final EdiciusGame game;
-    private final PerspectiveCamera worldCamera = new PerspectiveCamera(36f, VIEW_W, VIEW_H);
+    private final PerspectiveCamera worldCamera = new PerspectiveCamera(34f, VIEW_W, VIEW_H);
     private final OrthographicCamera hudCamera = new OrthographicCamera();
     private final Viewport worldViewport = new FitViewport(VIEW_W, VIEW_H, worldCamera);
     private final Viewport hudViewport = new FitViewport(VIEW_W, VIEW_H, hudCamera);
@@ -42,6 +43,8 @@ public class RunScreen extends ScreenAdapter {
     private final SimClock clock = new SimClock();
     private final HudRenderer hud = new HudRenderer();
     private final BloomEffect bloom = new BloomEffect();
+    private final Vector3 camDesired = new Vector3();
+    private final Vector3 lookDesired = new Vector3();
     private final Stage overlayStage;
     private final Table overlayRoot;
     private WorldRenderer worldRenderer;
@@ -49,6 +52,7 @@ public class RunScreen extends ScreenAdapter {
     private float tipTimer = 12f;
     private boolean showTips;
     private boolean overlayBuilt;
+    private boolean cameraSnapped;
 
     public RunScreen(EdiciusGame game) {
         this.game = game;
@@ -73,7 +77,8 @@ public class RunScreen extends ScreenAdapter {
                 && game.session.chapter != null && "boot".equals(game.session.chapter.id);
         tipTimer = 12f;
         overlayBuilt = false;
-        centerCamera();
+        cameraSnapped = false;
+        centerCamera(1f);
         game.audio.startMusic();
         refreshOverlayInput();
     }
@@ -124,7 +129,7 @@ public class RunScreen extends ScreenAdapter {
             return;
         }
 
-        centerCamera();
+        centerCamera(Math.min(1f, delta * 6f));
         worldCamera.update();
         hudCamera.update();
 
@@ -275,19 +280,27 @@ public class RunScreen extends ScreenAdapter {
         }
     }
 
-    private void centerCamera() {
+    private void centerCamera(float blend) {
         Player player = world.getPlayer();
-        // Isometric-style chase: 45° yaw, ~32° pitch (sim x/y → world x/z)
-        float dist = 780f;
+        // Isometric-style chase: 45° yaw, ~34° pitch (sim x/y → world x/z)
+        float dist = 720f;
         float yawRad = (float) Math.toRadians(45f);
-        float pitchRad = (float) Math.toRadians(32f);
+        float pitchRad = (float) Math.toRadians(34f);
         float horiz = dist * (float) Math.cos(pitchRad);
         float height = dist * (float) Math.sin(pitchRad);
-        float camX = player.x + horiz * (float) Math.sin(yawRad);
-        float camZ = player.y + horiz * (float) Math.cos(yawRad);
-        worldCamera.fieldOfView = 36f;
-        worldCamera.position.set(camX, height, camZ);
-        worldCamera.lookAt(player.x, 18f, player.y);
+        camDesired.set(
+                player.x + horiz * (float) Math.sin(yawRad),
+                height,
+                player.y + horiz * (float) Math.cos(yawRad));
+        lookDesired.set(player.x, 22f, player.y);
+        worldCamera.fieldOfView = 34f;
+        if (!cameraSnapped || blend >= 1f) {
+            worldCamera.position.set(camDesired);
+            cameraSnapped = true;
+        } else {
+            worldCamera.position.lerp(camDesired, blend);
+        }
+        worldCamera.lookAt(lookDesired.x, lookDesired.y, lookDesired.z);
         worldCamera.up.set(0f, 1f, 0f);
         worldCamera.update();
     }

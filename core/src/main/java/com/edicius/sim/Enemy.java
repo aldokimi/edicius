@@ -12,8 +12,10 @@ public class Enemy {
     public com.edicius.gfx.Facing facing = com.edicius.gfx.Facing.S;
     public boolean moving;
     public float aimAngleDeg;
-    public static final float SHOOT_RANGE = 400f;
+    public static final float SHOOT_RANGE = 420f;
     public static final float ENEMY_SHOT_SPEED = 380f;
+    /** Extra delay after LOS opens so cover peeks feel fair. */
+    private static final float LOS_ACQUIRE = 0.18f;
 
     public final EnemyRole role;
     public float x;
@@ -27,6 +29,7 @@ public class Enemy {
     private float contactCooldown;
     private float abilityCooldown;
     private float patchTimer;
+    private float losAcquire;
     private List<int[]> path = List.of();
     private float repathTimer;
     private int phase = 1;
@@ -123,10 +126,19 @@ public class Enemy {
             contactCooldown = CombatBalance.CONTACT_COOLDOWN;
         }
 
+        boolean los = LineOfSight.clear(collision.getMap(), x, y, player.x, player.y);
+        if (los) {
+            losAcquire = Math.min(LOS_ACQUIRE, losAcquire + dt);
+        } else {
+            losAcquire = 0f;
+            if (role.shootInterval > 0f) {
+                shootCooldown = Math.max(shootCooldown, 0.22f);
+            }
+        }
+
         if (role.shootInterval > 0f) {
             shootCooldown -= dt;
-            boolean canSee = dist <= SHOOT_RANGE && dist > 0.001f
-                    && LineOfSight.clear(collision.getMap(), x, y, player.x, player.y);
+            boolean canSee = dist <= SHOOT_RANGE && dist > 0.001f && losAcquire >= LOS_ACQUIRE;
             if (shootCooldown <= 0f && canSee) {
                 float shotSpeed = ENEMY_SHOT_SPEED * world.getProjectileSpeedMul();
                 if (role == EnemyRole.ECHO && phase >= 2) {
@@ -143,7 +155,7 @@ public class Enemy {
         }
 
         abilityCooldown -= dt;
-        if (abilityCooldown <= 0f && LineOfSight.clear(collision.getMap(), x, y, player.x, player.y)) {
+        if (abilityCooldown <= 0f && losAcquire >= LOS_ACQUIRE) {
             useAbility(world, player);
         }
 

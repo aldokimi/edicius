@@ -48,7 +48,9 @@ public class WorldRenderer implements Disposable {
     public static final float WALL_H = 56f;
     private static final float FLOOR_H = 4f;
     /** Kenney blocky characters are ~2m tall in model space. */
-    private static final float UNIT_SCALE = 28f;
+    private static final float UNIT_SCALE = 30f;
+    /** glTF +Z forward → sim +X (aim 0°) needs −90° yaw. */
+    private static final float MODEL_YAW_OFFSET = -90f;
 
     private final GameAssets assets;
     private final ParticleBus particles = new ParticleBus();
@@ -62,6 +64,7 @@ public class WorldRenderer implements Disposable {
     private final Array<Model> ownedModels = new Array<>();
     private final Matrix4 shapeXform = new Matrix4();
     private final PointLight playerLight = new PointLight();
+    private float animTime;
 
     private DecalBatch decalBatch;
     private CameraGroupStrategy decalStrategy;
@@ -93,6 +96,7 @@ public class WorldRenderer implements Disposable {
             ChromaPreset chroma,
             BiomePalette biome
     ) {
+        animTime += dt;
         particles.update(dt);
         ensureDecals(camera);
         bakeIfNeeded(world.getMap(), biome);
@@ -214,24 +218,33 @@ public class WorldRenderer implements Disposable {
         Player player = world.getPlayer();
         float pScale = UNIT_SCALE * (player.isInvulnerable() ? 1.08f : 1f);
         ModelInstance playerMesh = assets.meshes.createPlayer(characterId);
-        placeInstance(playerMesh, player.x, player.y, pScale, player.aimAngleDeg, chroma.tint, true);
+        placeInstance(playerMesh, player.x, player.y, pScale, player.aimAngleDeg, chroma.tint, true, player.moving);
 
         for (Enemy enemy : world.getEnemies()) {
             String key = enemyKey(enemy.role);
             float scale = UNIT_SCALE * enemy.scale * ("boss".equals(key) ? 1.45f : 1f);
             ModelInstance mesh = assets.meshes.create(key);
-            placeInstance(mesh, enemy.x, enemy.y, scale, enemy.aimAngleDeg, roleTint(enemy.role), false);
+            placeInstance(mesh, enemy.x, enemy.y, scale, enemy.aimAngleDeg, roleTint(enemy.role), false, enemy.moving);
         }
     }
 
     private void placeInstance(
-            ModelInstance inst, float x, float z, float scale, float aimDeg, Color tint, boolean softTint
+            ModelInstance inst,
+            float x,
+            float z,
+            float scale,
+            float aimDeg,
+            Color tint,
+            boolean softTint,
+            boolean moving
     ) {
         if (inst == null) {
             return;
         }
-        inst.transform.setToTranslation(x, FLOOR_H, z);
-        inst.transform.rotate(Vector3.Y, -aimDeg + 180f);
+        float bob = moving ? (float) Math.sin(animTime * 14f) * 2.2f : 0f;
+        float sway = moving ? (float) Math.sin(animTime * 10f) * 4f : 0f;
+        inst.transform.setToTranslation(x, FLOOR_H + bob, z);
+        inst.transform.rotate(Vector3.Y, -aimDeg + MODEL_YAW_OFFSET + sway);
         inst.transform.scale(scale, scale, scale);
         if (softTint) {
             // Mild multiply so chroma reads without wiping albedo

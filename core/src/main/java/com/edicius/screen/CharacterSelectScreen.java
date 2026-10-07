@@ -3,7 +3,6 @@ package com.edicius.screen;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
@@ -14,7 +13,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.edicius.EdiciusGame;
 import com.edicius.gfx.CharacterCatalog;
 import com.edicius.gfx.CharacterShell;
-import com.edicius.gfx.UnitSkin;
+import com.edicius.render.ShellPreview;
 import com.edicius.ui.MenuStageScreen;
 
 import java.util.List;
@@ -23,6 +22,9 @@ public class CharacterSelectScreen extends MenuStageScreen {
 
     private final Runnable onConfirm;
     private int index;
+    private ShellPreview preview;
+    private Image previewImage;
+    private TextureRegionDrawable previewDrawable;
 
     public CharacterSelectScreen(EdiciusGame game, Runnable onConfirm) {
         super(game);
@@ -37,27 +39,29 @@ public class CharacterSelectScreen extends MenuStageScreen {
     }
 
     @Override
+    public void show() {
+        preview = new ShellPreview(game.assets);
+        previewDrawable = new TextureRegionDrawable(preview.region());
+        previewImage = new Image(previewDrawable);
+        super.show();
+    }
+
+    @Override
     protected void buildUi(Table root) {
-        root.pad(36, 60, 36, 60).top().left();
-        root.add(new Label("SELECT PROTOCOL SHELL", game.ui.skin, "heading")).left().padBottom(8).colspan(2).row();
-        root.add(new Label("Click a shell · chroma buttons · Confirm", game.ui.skin, "muted"))
-                .left().padBottom(18).colspan(2).row();
+        root.pad(28, 48, 28, 48).top().left();
+
+        Table left = new Table();
+        left.add(new Label("SELECT PROTOCOL SHELL", game.ui.skin, "heading")).left().padBottom(8).row();
+        left.add(new Label("Click a shell · chroma · Confirm", game.ui.skin, "muted"))
+                .left().padBottom(16).row();
 
         Table cards = new Table();
         List<CharacterShell> shells = CharacterCatalog.SHELLS;
         for (int i = 0; i < shells.size(); i++) {
             CharacterShell shell = shells.get(i);
-            UnitSkin skin = game.assets.playerSkin(shell.id);
-            Texture preview = skin.armed != null ? skin.armed : skin.stand;
             TextButton card = new TextButton(shell.displayName, game.ui.skin);
-            if (preview != null) {
-                Image img = new Image(new TextureRegionDrawable(preview));
-                img.setColor(i == index ? game.meta.chroma.tint : new Color(0.6f, 0.6f, 0.65f, 1f));
-                Table inner = new Table();
-                inner.add(img).size(88, 88).padBottom(6).row();
-                inner.add(new Label(shell.displayName, game.ui.skin, i == index ? "accent" : "muted"));
-                card.clearChildren();
-                card.add(inner).pad(8);
+            if (i == index) {
+                card.setColor(game.meta.chroma.tint);
             }
             final int pick = i;
             card.addListener(new ChangeListener() {
@@ -68,9 +72,12 @@ public class CharacterSelectScreen extends MenuStageScreen {
                     buildUi(root);
                 }
             });
-            cards.add(card).size(150, 140).padRight(12);
+            cards.add(card).width(140).height(48).padRight(8).padBottom(8);
+            if ((i + 1) % 3 == 0) {
+                cards.row();
+            }
         }
-        root.add(cards).left().colspan(2).padBottom(20).row();
+        left.add(cards).left().padBottom(18).row();
 
         CharacterShell selected = shells.get(index);
         Label detailName = new Label(selected.displayName, game.ui.skin, "heading");
@@ -79,9 +86,9 @@ public class CharacterSelectScreen extends MenuStageScreen {
         detailBlurb.setWrap(true);
         Label chromaLabel = new Label("Chroma: " + game.meta.chroma.label + "  (cosmetics only)", game.ui.skin, "accent");
 
-        root.add(detailName).left().colspan(2).padBottom(6).row();
-        root.add(detailBlurb).width(900).left().colspan(2).padBottom(10).row();
-        root.add(chromaLabel).left().colspan(2).padBottom(16).row();
+        left.add(detailName).left().padBottom(6).row();
+        left.add(detailBlurb).width(560).left().padBottom(10).row();
+        left.add(chromaLabel).left().padBottom(16).row();
 
         Table actions = new Table();
         TextButton prevChroma = new TextButton("◀ Chroma", game.ui.skin);
@@ -118,11 +125,29 @@ public class CharacterSelectScreen extends MenuStageScreen {
                 game.setScreen(new MainMenuScreen(game));
             }
         });
-        actions.add(prevChroma).width(160).height(44).padRight(10);
-        actions.add(nextChroma).width(160).height(44).padRight(20);
-        actions.add(confirm).width(180).height(48).padRight(10);
-        actions.add(back).width(140).height(44);
-        root.add(actions).left().colspan(2).row();
+        actions.add(prevChroma).width(150).height(44).padRight(10);
+        actions.add(nextChroma).width(150).height(44).padRight(18);
+        actions.add(confirm).width(170).height(48).padRight(10);
+        actions.add(back).width(130).height(44);
+        left.add(actions).left().row();
+
+        root.add(left).expandY().top().left().padRight(24);
+        if (previewImage != null) {
+            root.add(previewImage).size(380, 380).top().right();
+        }
+    }
+
+    @Override
+    public void render(float delta) {
+        CharacterShell selected = CharacterCatalog.SHELLS.get(index);
+        if (preview != null) {
+            preview.setShell(selected.id, game.meta.chroma.tint);
+            preview.update(delta);
+            if (previewDrawable != null) {
+                previewDrawable.setRegion(preview.region());
+            }
+        }
+        super.render(delta);
     }
 
     private void confirmSelection() {
@@ -169,5 +194,23 @@ public class CharacterSelectScreen extends MenuStageScreen {
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             game.setScreen(new MainMenuScreen(game));
         }
+    }
+
+    @Override
+    public void hide() {
+        super.hide();
+        if (preview != null) {
+            preview.dispose();
+            preview = null;
+        }
+    }
+
+    @Override
+    public void dispose() {
+        if (preview != null) {
+            preview.dispose();
+            preview = null;
+        }
+        super.dispose();
     }
 }

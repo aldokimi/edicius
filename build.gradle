@@ -1,0 +1,11 @@
+allprojects {
+    apply plugin: 'eclipse'
+    version = '1.0.0'
+    ext {
+        appName = 'Edicius'
+    }
+    repositories {
+        mavenCentral()
+        maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
+    }
+}

@@ -1,0 +1,26 @@
+plugins {
+    id 'application'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+}
+
+application {
+    mainClass = 'com.edicius.lwjgl3.Lwjgl3Launcher'
+}
+
+tasks.named('run') {
+    workingDir = rootProject.file('assets')
+    ignoreExitValue = true
+}
+
+eclipse.project.name = "${appName}-lwjgl3"

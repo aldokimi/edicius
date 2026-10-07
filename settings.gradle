@@ -4,3 +4,5 @@
 
 rootProject.name = 'Edicius'
 include('app')
+include('core')
+include('lwjgl3')

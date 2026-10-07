@@ -6,22 +6,30 @@ import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.edicius.EdiciusGame;
+import com.edicius.gfx.BiomePalette;
 import com.edicius.input.GameInput;
 import com.edicius.input.InputCommand;
-import com.edicius.gfx.BiomePalette;
+import com.edicius.render.BloomEffect;
 import com.edicius.render.HudRenderer;
 import com.edicius.render.WorldRenderer;
 import com.edicius.sim.Player;
 import com.edicius.sim.SimClock;
 import com.edicius.sim.World;
+import com.edicius.ui.UiTheme;
 
 public class RunScreen extends ScreenAdapter {
 
-    private static final float VIEW_W = 1280f;
-    private static final float VIEW_H = 720f;
+    private static final float VIEW_W = UiTheme.VIEW_W;
+    private static final float VIEW_H = UiTheme.VIEW_H;
 
     private final EdiciusGame game;
     private final OrthographicCamera worldCamera = new OrthographicCamera();
@@ -32,13 +40,21 @@ public class RunScreen extends ScreenAdapter {
     private final GameInput input = new GameInput();
     private final SimClock clock = new SimClock();
     private final HudRenderer hud = new HudRenderer();
+    private final BloomEffect bloom = new BloomEffect();
+    private final Stage overlayStage;
+    private final Table overlayRoot;
     private WorldRenderer worldRenderer;
     private World world;
     private float tipTimer = 12f;
     private boolean showTips;
+    private boolean overlayBuilt;
 
     public RunScreen(EdiciusGame game) {
         this.game = game;
+        this.overlayStage = new Stage(hudViewport, game.batch);
+        this.overlayRoot = new Table();
+        overlayRoot.setFillParent(true);
+        overlayStage.addActor(overlayRoot);
     }
 
     @Override
@@ -52,14 +68,28 @@ public class RunScreen extends ScreenAdapter {
                 && game.session.mode == com.edicius.run.RunSession.Mode.CAMPAIGN
                 && game.session.chapter != null && "boot".equals(game.session.chapter.id);
         tipTimer = 12f;
+        overlayBuilt = false;
         centerCamera();
         game.audio.startMusic();
+        refreshOverlayInput();
     }
 
     @Override
     public void render(float delta) {
+        boolean blockingUi = showTips || world.isPaused() || world.isCleared();
+        if (blockingUi) {
+            rebuildOverlayIfNeeded();
+            overlayStage.act(delta);
+        } else if (overlayBuilt) {
+            overlayRoot.clear();
+            overlayBuilt = false;
+            refreshOverlayInput();
+        }
+
         clock.accumulate(Math.min(delta, 0.25f));
-        InputCommand cmd = input.poll(worldCamera);
+        InputCommand cmd = blockingUi
+                ? InputCommand.idle(world.getPlayer().x, world.getPlayer().y)
+                : input.poll(worldCamera);
         if (Gdx.input.isKeyJustPressed(Input.Keys.M)) {
             game.audio.toggleMute();
         }
@@ -73,8 +103,7 @@ public class RunScreen extends ScreenAdapter {
         if (showTips) {
             tipTimer -= delta;
             if (tipTimer <= 0f || Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-                showTips = false;
-                game.meta.markTutorialSeen();
+                dismissTips();
             }
         }
 
@@ -87,15 +116,7 @@ public class RunScreen extends ScreenAdapter {
             return;
         }
         if (world.isCleared() && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-            game.session.loadout.syncFromPlayer(world.getPlayer());
-            if (game.session.hasMoreRooms()) {
-                game.setScreen(new UpgradeScreen(game));
-            } else if (game.session.mode != com.edicius.run.RunSession.Mode.ENDLESS) {
-                game.session.victory = true;
-                game.setScreen(new ResultsScreen(game));
-            } else {
-                game.setScreen(new UpgradeScreen(game));
-            }
+            advanceAfterClear();
             return;
         }
 
@@ -103,13 +124,9 @@ public class RunScreen extends ScreenAdapter {
         worldCamera.update();
         hudCamera.update();
 
-        Gdx.gl.glClearColor(0.02f, 0.02f, 0.06f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-
-        worldViewport.apply();
         String chapterId = game.session.chapter != null ? game.session.chapter.id : null;
+        bloom.begin((int) VIEW_W, (int) VIEW_H);
+        worldViewport.apply();
         worldRenderer.render(
                 game.batch,
                 shapes,
@@ -120,6 +137,7 @@ public class RunScreen extends ScreenAdapter {
                 game.meta.chroma,
                 BiomePalette.forChapter(chapterId)
         );
+        bloom.endAndDraw(game.batch, hudCamera);
 
         hudViewport.apply();
         shapes.setProjectionMatrix(hudCamera.combined);
@@ -130,18 +148,127 @@ public class RunScreen extends ScreenAdapter {
         game.batch.setProjectionMatrix(hudCamera.combined);
         game.batch.begin();
         hud.renderText(game.batch, game.font, world, VIEW_W, VIEW_H, game.audio.isMuted());
-        if (showTips) {
-            hud.renderTutorial(game.batch, game.font, VIEW_W, VIEW_H);
-        }
         game.batch.end();
+
+        if (blockingUi) {
+            overlayStage.draw();
+        }
+    }
+
+    private void rebuildOverlayIfNeeded() {
+        if (overlayBuilt) {
+            return;
+        }
+        overlayRoot.clear();
+        if (showTips) {
+            Table panel = new Table(game.ui.skin);
+            panel.setBackground("panel");
+            panel.pad(28);
+            panel.add(new Label("NYX // QUICKSTART", game.ui.skin, "heading")).padBottom(12).row();
+            panel.add(new Label("WASD move  ·  mouse aim  ·  LMB fire", game.ui.skin)).padBottom(6).row();
+            panel.add(new Label("SPACE dash (i-frames)  ·  1/2/3 weapons", game.ui.skin)).padBottom(6).row();
+            panel.add(new Label("Clear rooms, pick upgrades, delete Warden-01", game.ui.skin)).padBottom(16).row();
+            TextButton dismiss = new TextButton("Got it", game.ui.skin);
+            dismiss.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    dismissTips();
+                }
+            });
+            panel.add(dismiss).width(200).height(46);
+            overlayRoot.add(panel).center();
+        } else if (world.isPaused()) {
+            Table panel = new Table(game.ui.skin);
+            panel.setBackground("panel");
+            panel.pad(28);
+            panel.add(new Label("PAUSED", game.ui.skin, "heading")).padBottom(16).row();
+            TextButton resume = new TextButton("Resume", game.ui.skin);
+            resume.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    // toggle pause via a fake escape next tick
+                    world.update(new InputCommand(0, 0, world.getPlayer().x, world.getPlayer().y,
+                            false, false, true, false, false, false, false), 0f);
+                    overlayBuilt = false;
+                    refreshOverlayInput();
+                }
+            });
+            panel.add(resume).width(200).height(46);
+            overlayRoot.add(panel).center();
+        } else if (world.isCleared()) {
+            Table panel = new Table(game.ui.skin);
+            panel.setBackground("panel");
+            panel.pad(28);
+            panel.add(new Label("ROOM CLEAR", game.ui.skin, "heading")).padBottom(16).row();
+            TextButton cont = new TextButton("Continue", game.ui.skin);
+            cont.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    advanceAfterClear();
+                }
+            });
+            panel.add(cont).width(220).height(48);
+            overlayRoot.add(panel).center();
+        }
+        overlayBuilt = true;
+        refreshOverlayInput();
+    }
+
+    private void dismissTips() {
+        showTips = false;
+        game.meta.markTutorialSeen();
+        overlayBuilt = false;
+        refreshOverlayInput();
+    }
+
+    private void advanceAfterClear() {
+        game.session.loadout.syncFromPlayer(world.getPlayer());
+        if (game.session.hasMoreRooms()) {
+            game.setScreen(new UpgradeScreen(game));
+        } else if (game.session.mode != com.edicius.run.RunSession.Mode.ENDLESS) {
+            game.session.victory = true;
+            game.setScreen(new ResultsScreen(game));
+        } else {
+            game.setScreen(new UpgradeScreen(game));
+        }
+    }
+
+    private void refreshOverlayInput() {
+        boolean blockingUi = showTips || (world != null && (world.isPaused() || world.isCleared()));
+        if (blockingUi) {
+            Gdx.input.setInputProcessor(overlayStage);
+        } else {
+            Gdx.input.setInputProcessor(null);
+        }
     }
 
     private void playEvents() {
         Player p = world.getPlayer();
-        if (p.eventDash) game.audio.playDash();
-        if (p.eventShoot) game.audio.playShoot();
-        if (p.eventHurt || world.eventHitConfirm) game.audio.playHit();
-        if (world.eventRoomClear) game.audio.playRoomClear();
+        if (p.eventDash) {
+            game.audio.playDash();
+            worldRenderer.particles().dash(p.x, p.y, p.aimAngleDeg > -999 ? (float) Math.cos(Math.toRadians(p.aimAngleDeg)) * 200f : 200f,
+                    (float) Math.sin(Math.toRadians(p.aimAngleDeg)) * 200f);
+        }
+        if (p.eventShoot) {
+            game.audio.playShoot();
+            worldRenderer.particles().muzzle(p.x, p.y, p.aimAngleDeg);
+        }
+        if (p.eventHurt || world.eventHitConfirm) {
+            game.audio.playHit();
+            if (world.eventHitConfirm) {
+                // approximate last hit near player aim
+                worldRenderer.particles().hit(p.x + (float) Math.cos(Math.toRadians(p.aimAngleDeg)) * 40f,
+                        p.y + (float) Math.sin(Math.toRadians(p.aimAngleDeg)) * 40f);
+            }
+        }
+        if (world.eventRoomClear) {
+            game.audio.playRoomClear();
+            worldRenderer.particles().roomClear(p.x, p.y);
+            overlayBuilt = false;
+        }
+        if (world.isPaused()) {
+            overlayBuilt = false;
+        }
     }
 
     private void centerCamera() {
@@ -160,7 +287,14 @@ public class RunScreen extends ScreenAdapter {
     }
 
     @Override
+    public void hide() {
+        Gdx.input.setInputProcessor(null);
+    }
+
+    @Override
     public void dispose() {
         shapes.dispose();
+        bloom.dispose();
+        overlayStage.dispose();
     }
 }

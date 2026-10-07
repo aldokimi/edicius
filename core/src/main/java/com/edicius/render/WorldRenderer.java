@@ -22,9 +22,14 @@ import com.edicius.sim.World;
 public class WorldRenderer {
 
     private final GameAssets assets;
+    private final ParticleBus particles = new ParticleBus();
 
     public WorldRenderer(GameAssets assets) {
         this.assets = assets;
+    }
+
+    public ParticleBus particles() {
+        return particles;
     }
 
     public void render(
@@ -37,6 +42,8 @@ public class WorldRenderer {
             ChromaPreset chroma,
             BiomePalette biome
     ) {
+        particles.update(dt);
+
         shapes.setProjectionMatrix(camera.combined);
         shapes.begin(ShapeRenderer.ShapeType.Filled);
         for (Telegraph t : world.getTelegraphs()) {
@@ -53,10 +60,16 @@ public class WorldRenderer {
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
         drawMap(batch, world, biome);
+        // ambient under-glow
+        Player player = world.getPlayer();
+        batch.setColor(chroma.tint.r, chroma.tint.g, chroma.tint.b, 0.22f);
+        batch.draw(assets.vfxFlare, player.x - 48, player.y - 48, 96, 96);
+        batch.setColor(Color.WHITE);
         drawEnemies(batch, world);
-        drawPlayer(batch, world.getPlayer(), characterId, chroma);
+        drawPlayer(batch, player, characterId, chroma);
         drawProjectiles(batch, world);
         drawVfx(batch, world, chroma);
+        particles.draw(batch, assets);
         batch.end();
     }
 

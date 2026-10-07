@@ -10,11 +10,14 @@ import com.edicius.net.LeaderboardClient;
 import com.edicius.net.LocalLeaderboardClient;
 import com.edicius.run.RunSession;
 import com.edicius.screen.BootScreen;
+import com.edicius.ui.UiTheme;
 
 public class EdiciusGame extends Game {
 
     public SpriteBatch batch;
+    /** Prefer theme fonts; kept for HUD call sites. */
     public BitmapFont font;
+    public UiTheme ui;
     public MetaProgress meta;
     public RunSession session;
     public GameAssets assets;
@@ -24,8 +27,8 @@ public class EdiciusGame extends Game {
     @Override
     public void create() {
         batch = new SpriteBatch();
-        font = new BitmapFont();
-        font.getData().setScale(1.05f);
+        ui = new UiTheme();
+        font = ui.font;
         assets = new GameAssets();
         assets.load();
         audio = new AudioBus();
@@ -47,8 +50,10 @@ public class EdiciusGame extends Game {
         if (assets != null) {
             assets.dispose();
         }
+        if (ui != null) {
+            ui.dispose();
+        }
         batch.dispose();
-        font.dispose();
         if (meta != null) {
             meta.save();
         }

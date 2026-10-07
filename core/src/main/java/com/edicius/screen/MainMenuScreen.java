@@ -2,16 +2,18 @@ package com.edicius.screen;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
-import com.badlogic.gdx.ScreenAdapter;
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.edicius.EdiciusGame;
 import com.edicius.meta.DailySeed;
 import com.edicius.run.RunSession;
+import com.edicius.ui.MenuStageScreen;
 
-public class MainMenuScreen extends ScreenAdapter {
+public class MainMenuScreen extends MenuStageScreen {
 
-    private final EdiciusGame game;
     private final String status;
 
     public MainMenuScreen(EdiciusGame game) {
@@ -19,64 +21,89 @@ public class MainMenuScreen extends ScreenAdapter {
     }
 
     public MainMenuScreen(EdiciusGame game, String status) {
-        this.game = game;
+        super(game);
         this.status = status;
     }
 
     @Override
-    public void render(float delta) {
-        Gdx.gl.glClearColor(0.05f, 0.05f, 0.12f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+    protected void buildUi(Table root) {
+        root.pad(48, 70, 40, 70).top().left();
 
-        game.batch.begin();
-        if (game.assets.menuBg != null) {
-            game.batch.setColor(1f, 1f, 1f, 0.55f);
-            game.batch.draw(game.assets.menuBg, 0, 0, 1280, 720);
-            game.batch.setColor(Color.WHITE);
+        root.add(new Label("EDICIUS", game.ui.skin, "title")).left().padBottom(4).row();
+        Label sub = new Label("NEON PROTOCOL", game.ui.skin, "heading");
+        sub.setColor(0.75f, 0.45f, 1f, 1f);
+        root.add(sub).left().padBottom(28).row();
+
+        addMenuButton(root, "Campaign chapters", this::openCampaign);
+        addMenuButton(root, "Daily Protocol (seed " + DailySeed.today() + ")", this::openDaily);
+        TextButton endless = addMenuButton(root, "Endless Protocol", this::openEndless);
+        if (!game.meta.endlessUnlocked) {
+            endless.setDisabled(true);
+            endless.setText("Endless Protocol (clear Act 3)");
         }
-        game.font.setColor(Color.CYAN);
-        game.font.getData().setScale(2.2f);
-        game.font.draw(game.batch, "EDICIUS", 70, 640);
-        game.font.getData().setScale(1.3f);
-        game.font.setColor(new Color(0.7f, 0.4f, 1f, 1f));
-        game.font.draw(game.batch, "NEON PROTOCOL", 74, 600);
-        game.font.getData().setScale(1.15f);
-        game.font.setColor(Color.WHITE);
-        game.font.draw(game.batch, "1  Campaign chapters", 80, 500);
-        game.font.draw(game.batch, "2  Daily Protocol (seed " + DailySeed.today() + ")", 80, 460);
-        game.font.draw(game.batch, "3  Endless Protocol" + (game.meta.endlessUnlocked ? "" : " (clear Act 3)"), 80, 420);
-        game.font.draw(game.batch, "4  Meta / Protocol tree", 80, 380);
-        game.font.draw(game.batch, "5  Codex", 80, 340);
-        game.font.draw(game.batch, "6  Protocol shells / chroma", 80, 300);
-        game.font.setColor(Color.LIGHT_GRAY);
-        game.font.draw(game.batch, "Shell: " + game.meta.selectedCharacterId
-                + "   Chroma: " + game.meta.chroma.label
-                + "   Points: " + game.meta.protocolPoints
-                + "   M mute", 80, 250);
+        addMenuButton(root, "Meta / Protocol tree", () -> game.setScreen(new MetaScreen(game)));
+        addMenuButton(root, "Codex", () -> game.setScreen(new CodexScreen(game)));
+        addMenuButton(root, "Protocol shells / chroma", () ->
+                game.setScreen(new CharacterSelectScreen(game, () -> game.setScreen(new MainMenuScreen(game)))));
+
+        root.add(new Label(
+                "Shell: " + game.meta.selectedCharacterId
+                        + "   ·   Chroma: " + game.meta.chroma.label
+                        + "   ·   Points: " + game.meta.protocolPoints,
+                game.ui.skin, "muted")).left().padTop(24).row();
+
         if (status != null && !status.isBlank()) {
-            game.font.setColor(Color.ORANGE);
-            game.font.draw(game.batch, status, 80, 230);
+            root.add(new Label(status, game.ui.skin, "accent")).left().padTop(8).row();
         }
-        game.font.setColor(new Color(0.5f, 0.9f, 1f, 1f));
-        game.font.getData().setScale(0.95f);
-        game.font.draw(game.batch, "Stylish outlaw AI vs THE GRID — desktop raid protocol", 80, 120);
-        game.batch.end();
 
+        root.add(new Label("Stylish outlaw AI vs THE GRID — click or use 1–6 / M mute", game.ui.skin, "muted"))
+                .left().padTop(36).row();
+    }
+
+    private TextButton addMenuButton(Table root, String text, Runnable action) {
+        TextButton btn = new TextButton(text, game.ui.skin);
+        btn.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                action.run();
+            }
+        });
+        root.add(btn).width(520).height(48).left().padBottom(10).row();
+        return btn;
+    }
+
+    private void openCampaign() {
+        game.setScreen(new ChapterSelectScreen(game));
+    }
+
+    private void openDaily() {
+        game.setScreen(new CharacterSelectScreen(game, () -> {
+            game.session = RunSession.daily(game.meta.createLoadout(), DailySeed.today());
+            game.setScreen(new BriefScreen(game));
+        }));
+    }
+
+    private void openEndless() {
+        if (!game.meta.endlessUnlocked) {
+            return;
+        }
+        game.setScreen(new CharacterSelectScreen(game, () -> {
+            game.session = RunSession.endless(game.meta.createLoadout(), System.nanoTime());
+            game.setScreen(new BriefScreen(game));
+        }));
+    }
+
+    @Override
+    protected void handleShortcuts() {
         if (Gdx.input.isKeyJustPressed(Input.Keys.M)) {
             game.audio.toggleMute();
         }
         if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_1) || Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-            game.setScreen(new ChapterSelectScreen(game));
+            openCampaign();
         } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_2)) {
-            game.setScreen(new CharacterSelectScreen(game, () -> {
-                game.session = RunSession.daily(game.meta.createLoadout(), DailySeed.today());
-                game.setScreen(new BriefScreen(game));
-            }));
-        } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_3) && game.meta.endlessUnlocked) {
-            game.setScreen(new CharacterSelectScreen(game, () -> {
-                game.session = RunSession.endless(game.meta.createLoadout(), System.nanoTime());
-                game.setScreen(new BriefScreen(game));
-            }));
+            openDaily();
+        } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_3)) {
+            openEndless();
         } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_4)) {
             game.setScreen(new MetaScreen(game));
         } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_5)) {

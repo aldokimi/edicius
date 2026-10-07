@@ -8,8 +8,10 @@
 
 ## Runtime art
 
-- Kenney / OpenGameArt CC0 and pack-derived sprites under `assets/runtime/` (tiles, VFX, character/enemy stand-ins)
-- Legacy unit sheets under `assets/sprites/`
+- **Kenney Topdown Shooter** (CC0) — character shells / enemies (`assets/licenses/Kenney-TopdownShooter.txt`)
+- **Kenney Sci-Fi RTS** (CC0) — props / accent pieces (`assets/licenses/Kenney-SciFiRTS.txt`)
+- Arena is rendered in **perspective 3D** (extruded walls, lit floors, billboard units)
+- VFX under `assets/runtime/vfx/`; legacy sheets under `assets/sprites/`
 
 ## Engine
 

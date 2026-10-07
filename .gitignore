@@ -20,3 +20,6 @@ bin
 assets/packs/_dl/
 assets/packs/kenney-particles/
 assets/packs/kenney-topdown/
+
+tmp/
+

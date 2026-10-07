@@ -2,14 +2,12 @@ package com.edicius.input;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
-import com.badlogic.gdx.graphics.OrthographicCamera;
-import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.graphics.Camera;
+import com.badlogic.gdx.math.collision.Ray;
 
 public class GameInput {
 
-    private final Vector3 tmp = new Vector3();
-
-    public InputCommand poll(OrthographicCamera camera) {
+    public InputCommand poll(Camera camera) {
         float mx = 0f;
         float my = 0f;
         if (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.LEFT)) {
@@ -30,14 +28,23 @@ public class GameInput {
             my /= len;
         }
 
-        tmp.set(Gdx.input.getX(), Gdx.input.getY(), 0f);
-        camera.unproject(tmp);
+        float aimX = 0f;
+        float aimY = 0f;
+        Ray ray = camera.getPickRay(Gdx.input.getX(), Gdx.input.getY());
+        // Intersect ground plane Y = 0 (sim x/z map to world x/z).
+        if (Math.abs(ray.direction.y) > 0.0001f) {
+            float t = -ray.origin.y / ray.direction.y;
+            if (t > 0f) {
+                aimX = ray.origin.x + ray.direction.x * t;
+                aimY = ray.origin.z + ray.direction.z * t;
+            }
+        }
 
         return new InputCommand(
                 mx,
                 my,
-                tmp.x,
-                tmp.y,
+                aimX,
+                aimY,
                 Gdx.input.isButtonPressed(Input.Buttons.LEFT),
                 Gdx.input.isKeyJustPressed(Input.Keys.SPACE),
                 Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) || Gdx.input.isKeyJustPressed(Input.Keys.P),

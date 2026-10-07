@@ -5,6 +5,7 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -32,7 +33,7 @@ public class RunScreen extends ScreenAdapter {
     private static final float VIEW_H = UiTheme.VIEW_H;
 
     private final EdiciusGame game;
-    private final OrthographicCamera worldCamera = new OrthographicCamera();
+    private final PerspectiveCamera worldCamera = new PerspectiveCamera(52f, VIEW_W, VIEW_H);
     private final OrthographicCamera hudCamera = new OrthographicCamera();
     private final Viewport worldViewport = new FitViewport(VIEW_W, VIEW_H, worldCamera);
     private final Viewport hudViewport = new FitViewport(VIEW_W, VIEW_H, hudCamera);
@@ -63,7 +64,10 @@ public class RunScreen extends ScreenAdapter {
         world = World.forRoom(game.session.currentRoom(), game.session.loadout, game.session.activeMutator, seed);
         worldRenderer = new WorldRenderer(game.assets);
         hudCamera.setToOrtho(false, VIEW_W, VIEW_H);
-        worldCamera.setToOrtho(false, VIEW_W, VIEW_H);
+        worldCamera.near = 8f;
+        worldCamera.far = 4500f;
+        worldCamera.viewportWidth = VIEW_W;
+        worldCamera.viewportHeight = VIEW_H;
         showTips = !game.meta.tutorialSeen && game.session.roomIndex == 0
                 && game.session.mode == com.edicius.run.RunSession.Mode.CAMPAIGN
                 && game.session.chapter != null && "boot".equals(game.session.chapter.id);
@@ -273,11 +277,13 @@ public class RunScreen extends ScreenAdapter {
 
     private void centerCamera() {
         Player player = world.getPlayer();
-        float halfW = VIEW_W * 0.5f;
-        float halfH = VIEW_H * 0.5f;
-        float camX = Math.max(halfW, Math.min(player.x, world.getMap().worldWidth() - halfW));
-        float camY = Math.max(halfH, Math.min(player.y, world.getMap().worldHeight() - halfH));
-        worldCamera.position.set(camX, camY, 0f);
+        // High angled chase cam: sim (x,y) → world (x,z)
+        float height = 540f;
+        float back = 500f;
+        worldCamera.position.set(player.x, height, player.y + back);
+        worldCamera.lookAt(player.x, 0f, player.y);
+        worldCamera.up.set(0f, 1f, 0f);
+        worldCamera.update();
     }
 
     @Override
@@ -296,5 +302,8 @@ public class RunScreen extends ScreenAdapter {
         shapes.dispose();
         bloom.dispose();
         overlayStage.dispose();
+        if (worldRenderer != null) {
+            worldRenderer.dispose();
+        }
     }
 }

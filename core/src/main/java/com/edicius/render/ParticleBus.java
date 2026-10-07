@@ -3,6 +3,10 @@ package com.edicius.render;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.g3d.decals.Decal;
+import com.badlogic.gdx.graphics.g3d.decals.DecalBatch;
+import com.badlogic.gdx.math.Vector3;
 import com.edicius.gfx.GameAssets;
 
 import java.util.ArrayList;
@@ -101,17 +105,35 @@ public class ParticleBus {
         for (P p : live) {
             float alpha = Math.max(0f, p.life / p.maxLife);
             batch.setColor(p.r, p.g, p.b, alpha);
-            Texture tex = switch (p.kind) {
-                case MUZZLE -> assets.vfxMuzzle;
-                case HIT -> assets.vfxSpark;
-                case DEATH -> assets.vfxStar;
-                case DASH -> assets.vfxFlare;
-                case CLEAR -> assets.vfxCircle;
-            };
+            Texture tex = texFor(assets, p.kind);
             float s = p.size * (0.6f + 0.8f * alpha);
             batch.draw(tex, p.x - s * 0.5f, p.y - s * 0.5f, s, s);
         }
         batch.setColor(Color.WHITE);
+    }
+
+    /** Billboard particles in the 3D arena (sim x/y → world x/z). */
+    public void drawAsDecals(DecalBatch batch, GameAssets assets, Vector3 cameraPos) {
+        for (P p : live) {
+            float alpha = Math.max(0f, p.life / p.maxLife);
+            Texture tex = texFor(assets, p.kind);
+            float s = p.size * (0.6f + 0.8f * alpha);
+            Decal d = Decal.newDecal(s, s, new TextureRegion(tex), true);
+            d.setColor(p.r, p.g, p.b, alpha);
+            d.setPosition(p.x, 18f + (1f - alpha) * 12f, p.y);
+            d.lookAt(cameraPos, Vector3.Y);
+            batch.add(d);
+        }
+    }
+
+    private static Texture texFor(GameAssets assets, Kind kind) {
+        return switch (kind) {
+            case MUZZLE -> assets.vfxMuzzle;
+            case HIT -> assets.vfxSpark;
+            case DEATH -> assets.vfxStar;
+            case DASH -> assets.vfxFlare;
+            case CLEAR -> assets.vfxCircle;
+        };
     }
 
     private enum Kind { MUZZLE, HIT, DEATH, DASH, CLEAR }

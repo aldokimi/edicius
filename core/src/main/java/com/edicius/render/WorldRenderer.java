@@ -1,10 +1,29 @@
 package com.edicius.render;
 
+import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.g3d.Environment;
+import com.badlogic.gdx.graphics.g3d.Material;
+import com.badlogic.gdx.graphics.g3d.Model;
+import com.badlogic.gdx.graphics.g3d.ModelBatch;
+import com.badlogic.gdx.graphics.g3d.ModelInstance;
+import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
+import com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute;
+import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
+import com.badlogic.gdx.graphics.g3d.environment.PointLight;
+import com.badlogic.gdx.graphics.g3d.decals.CameraGroupStrategy;
+import com.badlogic.gdx.graphics.g3d.decals.Decal;
+import com.badlogic.gdx.graphics.g3d.decals.DecalBatch;
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.Disposable;
 import com.edicius.gfx.BiomePalette;
 import com.edicius.gfx.ChromaPreset;
 import com.edicius.gfx.GameAssets;
@@ -19,13 +38,37 @@ import com.edicius.sim.TileMap;
 import com.edicius.sim.VfxBurst;
 import com.edicius.sim.World;
 
-public class WorldRenderer {
+/**
+ * Perspective 3D arena: extruded walls, lit floor tiles, billboard characters.
+ * Sim space (x,y) maps to world (x, z) with height on Y.
+ */
+public class WorldRenderer implements Disposable {
+
+    public static final float WALL_H = 56f;
+    private static final float FLOOR_H = 4f;
 
     private final GameAssets assets;
     private final ParticleBus particles = new ParticleBus();
+    private final ModelBatch modelBatch = new ModelBatch();
+    private final Environment environment = new Environment();
+    private final ModelBuilder modelBuilder = new ModelBuilder();
+    private final Array<ModelInstance> solids = new Array<>();
+    private final Array<Model> ownedModels = new Array<>();
+    private final Matrix4 shapeXform = new Matrix4();
+    private final PointLight playerLight = new PointLight();
+
+    private DecalBatch decalBatch;
+    private CameraGroupStrategy decalStrategy;
+    private TileMap bakedMap;
+    private ModelInstance[][] floorInst;
+    private ModelInstance[][] wallInst;
 
     public WorldRenderer(GameAssets assets) {
         this.assets = assets;
+        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.28f, 0.3f, 0.38f, 1f));
+        environment.add(new DirectionalLight().set(0.85f, 0.88f, 1f, -0.35f, -1f, -0.25f));
+        environment.add(new DirectionalLight().set(0.35f, 0.25f, 0.55f, 0.4f, -0.2f, 0.55f));
+        environment.add(playerLight);
     }
 
     public ParticleBus particles() {
@@ -35,7 +78,7 @@ public class WorldRenderer {
     public void render(
             SpriteBatch batch,
             ShapeRenderer shapes,
-            OrthographicCamera camera,
+            Camera camera,
             World world,
             float dt,
             String characterId,
@@ -43,137 +86,190 @@ public class WorldRenderer {
             BiomePalette biome
     ) {
         particles.update(dt);
+        ensureDecals(camera);
+        bakeIfNeeded(world.getMap(), biome);
 
+        Player player = world.getPlayer();
+        playerLight.set(chroma.tint.r, chroma.tint.g, chroma.tint.b, player.x, 40f, player.y, 280f);
+
+        modelBatch.begin(camera);
+        for (ModelInstance m : solids) {
+            modelBatch.render(m, environment);
+        }
+        modelBatch.end();
+
+        // Ground markers (telegraphs / hack) as discs on the XZ floor plane
         shapes.setProjectionMatrix(camera.combined);
         shapes.begin(ShapeRenderer.ShapeType.Filled);
         for (Telegraph t : world.getTelegraphs()) {
-            float a = 0.18f + 0.45f * t.progress();
-            shapes.setColor(1f, 0.2f, 0.15f, a);
-            shapes.circle(t.x, t.y, t.radius);
+            float a = 0.22f + 0.5f * t.progress();
+            shapes.setColor(1f, 0.15f, 0.2f, a);
+            shapeXform.idt().translate(t.x, 2f, t.y).rotate(Vector3.X, 90f);
+            shapes.setTransformMatrix(shapeXform);
+            shapes.circle(0f, 0f, t.radius, 28);
         }
         if (world.getRoom().type == ArenaType.HACK) {
-            shapes.setColor(biome.accentTint.r, biome.accentTint.g, biome.accentTint.b, 0.35f);
-            shapes.circle(world.getObjectiveX(), world.getObjectiveY(), 55f);
+            shapes.setColor(biome.accentTint.r, biome.accentTint.g, biome.accentTint.b, 0.4f);
+            shapeXform.idt().translate(world.getObjectiveX(), 2f, world.getObjectiveY()).rotate(Vector3.X, 90f);
+            shapes.setTransformMatrix(shapeXform);
+            shapes.circle(0f, 0f, 55f, 28);
         }
+        shapes.identity();
         shapes.end();
 
-        batch.setProjectionMatrix(camera.combined);
-        batch.begin();
-        drawMap(batch, world, biome);
-        // ambient under-glow
-        Player player = world.getPlayer();
-        batch.setColor(chroma.tint.r, chroma.tint.g, chroma.tint.b, 0.22f);
-        batch.draw(assets.vfxFlare, player.x - 48, player.y - 48, 96, 96);
-        batch.setColor(Color.WHITE);
-        drawEnemies(batch, world);
-        drawPlayer(batch, player, characterId, chroma);
-        drawProjectiles(batch, world);
-        drawVfx(batch, world, chroma);
-        particles.draw(batch, assets);
-        batch.end();
+        ensureDecalBatch(camera);
+        drawUnitDecals(world, characterId, chroma);
+        drawProjectileDecals(world);
+        drawBurstDecals(world, chroma);
+        particles.drawAsDecals(decalBatch, assets, decalStrategy.getCamera().position);
+        decalBatch.flush();
     }
 
-    private void drawMap(SpriteBatch batch, World world, BiomePalette biome) {
-        TileMap map = world.getMap();
-        for (int x = 0; x < map.width(); x++) {
-            for (int y = 0; y < map.height(); y++) {
+    private void ensureDecals(Camera camera) {
+        if (decalStrategy == null || decalStrategy.getCamera() != camera) {
+            if (decalBatch != null) {
+                decalBatch.dispose();
+            }
+            if (decalStrategy != null) {
+                decalStrategy.dispose();
+            }
+            decalStrategy = new CameraGroupStrategy(camera);
+            decalBatch = new DecalBatch(decalStrategy);
+        }
+    }
+
+    private DecalBatch ensureDecalBatch(Camera camera) {
+        ensureDecals(camera);
+        return decalBatch;
+    }
+
+    private void bakeIfNeeded(TileMap map, BiomePalette biome) {
+        if (bakedMap == map && floorInst != null) {
+            return;
+        }
+        clearBake();
+        bakedMap = map;
+        int w = map.width();
+        int h = map.height();
+        floorInst = new ModelInstance[w][h];
+        wallInst = new ModelInstance[w][h];
+        float ts = TileMap.TILE_SIZE;
+
+        Model floorModelA = box(ts, FLOOR_H, ts, assets.floorA, biome.floorTint);
+        Model floorModelB = box(ts, FLOOR_H, ts, assets.floorB, biome.floorTint);
+        Model wallModelA = box(ts * 0.95f, WALL_H, ts * 0.95f, assets.wallA, biome.wallTint);
+        Model wallModelB = box(ts * 0.95f, WALL_H, ts * 0.95f, assets.wallB, biome.wallTint);
+        ownedModels.add(floorModelA);
+        ownedModels.add(floorModelB);
+        ownedModels.add(wallModelA);
+        ownedModels.add(wallModelB);
+
+        for (int x = 0; x < w; x++) {
+            for (int y = 0; y < h; y++) {
+                float cx = map.tileCenterX(x);
+                float cz = map.tileCenterY(y);
                 boolean solid = map.isSolid(x, y);
-                Texture tile;
+                Model floorM = ((x * 3 + y) % 5 == 0) ? floorModelB : floorModelA;
+                ModelInstance floor = new ModelInstance(floorM);
+                floor.transform.setToTranslation(cx, FLOOR_H * 0.5f, cz);
+                solids.add(floor);
+                floorInst[x][y] = floor;
+
                 if (solid) {
-                    tile = ((x + y) % 3 == 0) ? assets.wallB : assets.wallA;
-                    batch.setColor(biome.wallTint);
-                } else {
-                    tile = ((x * 3 + y) % 5 == 0) ? assets.floorB : assets.floorA;
-                    batch.setColor(biome.floorTint);
-                }
-                batch.draw(tile, x * TileMap.TILE_SIZE, y * TileMap.TILE_SIZE, TileMap.TILE_SIZE, TileMap.TILE_SIZE);
-                if (!solid && (x + y * 2) % 17 == 0) {
-                    batch.setColor(biome.accentTint.r, biome.accentTint.g, biome.accentTint.b, 0.55f);
-                    batch.draw(assets.accentTile, x * TileMap.TILE_SIZE + 16, y * TileMap.TILE_SIZE + 16, 32, 32);
+                    Model wallM = ((x + y) % 3 == 0) ? wallModelB : wallModelA;
+                    ModelInstance wall = new ModelInstance(wallM);
+                    wall.transform.setToTranslation(cx, WALL_H * 0.5f + FLOOR_H, cz);
+                    solids.add(wall);
+                    wallInst[x][y] = wall;
+                } else if ((x + y * 2) % 19 == 0 && assets.propA != null) {
+                    Model prop = box(28f, 22f, 28f, assets.propA, biome.accentTint);
+                    ownedModels.add(prop);
+                    ModelInstance pi = new ModelInstance(prop);
+                    pi.transform.setToTranslation(cx, 11f + FLOOR_H, cz);
+                    solids.add(pi);
                 }
             }
         }
-        batch.setColor(Color.WHITE);
     }
 
-    private void drawPlayer(SpriteBatch batch, Player player, String characterId, ChromaPreset chroma) {
+    private Model box(float w, float h, float d, Texture tex, Color tint) {
+        Material mat = new Material(
+                TextureAttribute.createDiffuse(tex),
+                ColorAttribute.createDiffuse(tint)
+        );
+        return modelBuilder.createBox(w, h, d, mat,
+                VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal | VertexAttributes.Usage.TextureCoordinates);
+    }
+
+    private void drawUnitDecals(World world, String characterId, ChromaPreset chroma) {
+        Player player = world.getPlayer();
         UnitSkin skin = assets.playerSkin(characterId);
-        Texture tex = player.moving || player.weapon != null ? skin.armed : skin.stand;
-        batch.setColor(chroma.tint);
-        drawRotated(batch, tex, player.x, player.y, player.aimAngleDeg - 90f, 56f * (player.isInvulnerable() ? 1.08f : 1f));
-        batch.setColor(chroma.tint.r, chroma.tint.g, chroma.tint.b, 0.35f);
-        batch.draw(assets.vfxFlare, player.x - 18, player.y - 18, 36, 36);
-        batch.setColor(Color.WHITE);
-    }
+        Texture ptex = player.moving || player.weapon != null
+                ? (skin.armed != null ? skin.armed : skin.stand)
+                : skin.stand;
+        float pSize = 70f * (player.isInvulnerable() ? 1.1f : 1f);
+        addBillboard(ptex, player.x, pSize * 0.45f, player.y, pSize, chroma.tint, player.aimAngleDeg);
 
-    private void drawEnemies(SpriteBatch batch, World world) {
         for (Enemy enemy : world.getEnemies()) {
-            String key = enemyKey(enemy.role);
-            UnitSkin skin = assets.enemySkin(key);
-            Texture tex = enemy.moving ? skin.armed : skin.stand;
-            batch.setColor(roleTint(enemy.role));
-            float size = 52f * enemy.scale;
-            drawRotated(batch, tex, enemy.x, enemy.y, enemy.aimAngleDeg - 90f, size);
-            batch.setColor(Color.WHITE);
+            UnitSkin es = assets.enemySkin(enemyKey(enemy.role));
+            Texture tex = enemy.moving && es.armed != null ? es.armed : es.stand;
+            float size = 64f * enemy.scale;
+            addBillboard(tex, enemy.x, size * 0.42f, enemy.y, size, roleTint(enemy.role), enemy.aimAngleDeg);
             if (enemy.huntMarked) {
-                batch.setColor(1f, 1f, 0.3f, 0.85f);
-                batch.draw(assets.vfxStar, enemy.x - 14, enemy.y + size * 0.35f, 28, 28);
-                batch.setColor(Color.WHITE);
+                addBillboard(assets.vfxStar, enemy.x, size * 0.9f, enemy.y, 28f, Color.YELLOW, 0f);
             }
         }
     }
 
-    private void drawProjectiles(SpriteBatch batch, World world) {
+    private void drawProjectileDecals(World world) {
         for (Projectile shot : world.getProjectiles()) {
-            if (shot.owner == Projectile.Owner.PLAYER) {
-                batch.setColor(1f, 0.95f, 0.35f, 1f);
-                batch.draw(assets.vfxMuzzle, shot.x - 12, shot.y - 12, 24, 24);
-            } else {
-                batch.setColor(1f, 0.25f, 0.45f, 1f);
-                batch.draw(assets.vfxMagic, shot.x - 14, shot.y - 14, 28, 28);
-            }
-            batch.setColor(Color.WHITE);
+            Texture tex = shot.owner == Projectile.Owner.PLAYER ? assets.vfxMuzzle : assets.vfxMagic;
+            Color c = shot.owner == Projectile.Owner.PLAYER
+                    ? new Color(1f, 0.95f, 0.4f, 1f)
+                    : new Color(1f, 0.3f, 0.5f, 1f);
+            addBillboard(tex, shot.x, 14f, shot.y, 22f, c, 0f);
         }
     }
 
-    private void drawVfx(SpriteBatch batch, World world, ChromaPreset chroma) {
+    private void drawBurstDecals(World world, ChromaPreset chroma) {
         for (VfxBurst b : world.getBursts()) {
             float p = Math.max(0.05f, b.life / b.maxLife);
-            float size = 40f * (1.4f - p);
-            batch.setColor(b.r, b.g, b.b, p);
-            Texture tex = b.r > 0.8f && b.g < 0.5f ? assets.vfxSpark : assets.vfxStar;
+            float size = 42f * (1.35f - p);
+            Color c = new Color(b.r, b.g, b.b, p);
             if (b.g > 0.8f) {
-                tex = assets.vfxCircle;
-                batch.setColor(chroma.tint.r, chroma.tint.g, chroma.tint.b, p);
+                c.set(chroma.tint.r, chroma.tint.g, chroma.tint.b, p);
             }
-            batch.draw(tex, b.x - size * 0.5f, b.y - size * 0.5f, size, size);
+            addBillboard(assets.vfxCircle, b.x, 20f, b.y, size, c, 0f);
         }
-        batch.setColor(Color.WHITE);
+        // particle bus as small decals
+        // (ParticleBus draws in 2D; also emit a few via its positions — skipped for brevity)
     }
 
-    private static void drawRotated(SpriteBatch batch, Texture tex, float x, float y, float angleDeg, float size) {
+    private void addBillboard(Texture tex, float x, float y, float z, float size, Color tint, float aimDeg) {
         if (tex == null) {
             return;
         }
-        float origin = size * 0.5f;
-        batch.draw(
-                tex,
-                x - origin,
-                y - origin,
-                origin,
-                origin,
-                size,
-                size,
-                1f,
-                1f,
-                angleDeg,
-                0,
-                0,
-                tex.getWidth(),
-                tex.getHeight(),
-                false,
-                false
-        );
+        Decal d = Decal.newDecal(size, size, new TextureRegion(tex), true);
+        d.setColor(tint.r, tint.g, tint.b, tint.a);
+        d.setPosition(x, y, z);
+        // face camera
+        d.lookAt(decalStrategy.getCamera().position, Vector3.Y);
+        // slight yaw from aim so facing reads
+        if (Math.abs(aimDeg) > 0.01f) {
+            d.rotateY(-aimDeg);
+        }
+        decalBatch.add(d);
+    }
+
+    private void clearBake() {
+        solids.clear();
+        for (Model m : ownedModels) {
+            m.dispose();
+        }
+        ownedModels.clear();
+        floorInst = null;
+        wallInst = null;
+        bakedMap = null;
     }
 
     private static String enemyKey(EnemyRole role) {
@@ -195,5 +291,17 @@ public class WorldRenderer {
             case WARDEN, ECHO, GRID_ROOT -> new Color(1f, 0.45f, 0.4f, 1f);
             default -> new Color(1f, 0.7f, 0.45f, 1f);
         };
+    }
+
+    @Override
+    public void dispose() {
+        clearBake();
+        modelBatch.dispose();
+        if (decalBatch != null) {
+            decalBatch.dispose();
+        }
+        if (decalStrategy != null) {
+            decalStrategy.dispose();
+        }
     }
 }

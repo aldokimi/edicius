@@ -18,6 +18,9 @@ public class GameAssets {
     public Texture wallA;
     public Texture wallB;
     public Texture accentTile;
+    public Texture propA;
+    public Texture propB;
+    public Texture propC;
 
     public Texture vfxSpark;
     public Texture vfxStar;
@@ -50,6 +53,9 @@ public class GameAssets {
         wallA = tex("runtime/tiles/wall_a.png");
         wallB = tex("runtime/tiles/wall_b.png");
         accentTile = tex("runtime/tiles/accent.png");
+        propA = softTex("runtime/props/prop_a.png");
+        propB = softTex("runtime/props/prop_b.png");
+        propC = softTex("runtime/props/prop_c.png");
 
         vfxSpark = tex("runtime/vfx/spark_01.png");
         vfxStar = tex("runtime/vfx/star_01.png");
@@ -109,8 +115,8 @@ public class GameAssets {
     public void dispose() {
         for (UnitSkin s : characters.values()) s.dispose();
         for (UnitSkin s : enemies.values()) s.dispose();
-        dispose(floorA, floorB, wallA, wallB, accentTile, vfxSpark, vfxStar, vfxMuzzle, vfxFlare, vfxMagic,
-                vfxCircle, menuBg, gameOverBg, shotFallback, daveStand, daveWalk, mattStand, mattWalk);
+        dispose(floorA, floorB, wallA, wallB, accentTile, propA, propB, propC, vfxSpark, vfxStar, vfxMuzzle,
+                vfxFlare, vfxMagic, vfxCircle, menuBg, gameOverBg, shotFallback, daveStand, daveWalk, mattStand, mattWalk);
     }
 
     private static void dispose(Texture... textures) {

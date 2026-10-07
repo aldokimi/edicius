@@ -21,11 +21,14 @@ public class BloomEffect implements Disposable {
         ensure(width, height);
         fbo.begin();
         Gdx.gl.glClearColor(0.02f, 0.02f, 0.06f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+        Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
+        Gdx.gl.glDepthFunc(GL20.GL_LEQUAL);
     }
 
     public void endAndDraw(SpriteBatch batch, OrthographicCamera screenCam) {
         fbo.end();
+        Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
         Texture tex = fbo.getColorBufferTexture();
         tex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
 
@@ -61,7 +64,7 @@ public class BloomEffect implements Disposable {
         }
         w = Math.max(2, width);
         h = Math.max(2, height);
-        fbo = new FrameBuffer(Pixmap.Format.RGBA8888, w, h, false);
+        fbo = new FrameBuffer(Pixmap.Format.RGBA8888, w, h, true);
     }
 
     @Override

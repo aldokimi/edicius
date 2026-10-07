@@ -125,7 +125,9 @@ public class Enemy {
 
         if (role.shootInterval > 0f) {
             shootCooldown -= dt;
-            if (shootCooldown <= 0f && dist <= SHOOT_RANGE && dist > 0.001f) {
+            boolean canSee = dist <= SHOOT_RANGE && dist > 0.001f
+                    && LineOfSight.clear(collision.getMap(), x, y, player.x, player.y);
+            if (shootCooldown <= 0f && canSee) {
                 float shotSpeed = ENEMY_SHOT_SPEED * world.getProjectileSpeedMul();
                 if (role == EnemyRole.ECHO && phase >= 2) {
                     // mirror volley
@@ -141,7 +143,7 @@ public class Enemy {
         }
 
         abilityCooldown -= dt;
-        if (abilityCooldown <= 0f) {
+        if (abilityCooldown <= 0f && LineOfSight.clear(collision.getMap(), x, y, player.x, player.y)) {
             useAbility(world, player);
         }
 

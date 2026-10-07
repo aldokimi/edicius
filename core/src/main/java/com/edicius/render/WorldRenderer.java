@@ -185,7 +185,8 @@ public class WorldRenderer implements Disposable {
                 float cx = map.tileCenterX(x);
                 float cz = map.tileCenterY(y);
                 boolean solid = map.isSolid(x, y);
-                Model floorM = ((x * 3 + y) % 5 == 0) ? floorModelB : floorModelA;
+                Model floorM = map.isAccentFloor(x, y) || ((x * 3 + y) % 5 == 0)
+                        ? floorModelB : floorModelA;
                 ModelInstance floor = new ModelInstance(floorM);
                 floor.transform.setToTranslation(cx, FLOOR_H * 0.5f, cz);
                 solids.add(floor);

@@ -65,6 +65,14 @@ public class TileMap {
         return tiles[tileX][tileY] == 1;
     }
 
+    /** Accent / panel floor (walkable). Tile value 2. */
+    public boolean isAccentFloor(int tileX, int tileY) {
+        if (tileX < 0 || tileY < 0 || tileX >= width() || tileY >= height()) {
+            return false;
+        }
+        return tiles[tileX][tileY] == 2;
+    }
+
     public int[][] raw() {
         return tiles;
     }

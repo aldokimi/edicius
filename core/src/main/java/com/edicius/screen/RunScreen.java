@@ -33,7 +33,7 @@ public class RunScreen extends ScreenAdapter {
     private static final float VIEW_H = UiTheme.VIEW_H;
 
     private final EdiciusGame game;
-    private final PerspectiveCamera worldCamera = new PerspectiveCamera(52f, VIEW_W, VIEW_H);
+    private final PerspectiveCamera worldCamera = new PerspectiveCamera(36f, VIEW_W, VIEW_H);
     private final OrthographicCamera hudCamera = new OrthographicCamera();
     private final Viewport worldViewport = new FitViewport(VIEW_W, VIEW_H, worldCamera);
     private final Viewport hudViewport = new FitViewport(VIEW_W, VIEW_H, hudCamera);
@@ -277,11 +277,17 @@ public class RunScreen extends ScreenAdapter {
 
     private void centerCamera() {
         Player player = world.getPlayer();
-        // High angled chase cam: sim (x,y) → world (x,z)
-        float height = 540f;
-        float back = 500f;
-        worldCamera.position.set(player.x, height, player.y + back);
-        worldCamera.lookAt(player.x, 0f, player.y);
+        // Isometric-style chase: 45° yaw, ~32° pitch (sim x/y → world x/z)
+        float dist = 780f;
+        float yawRad = (float) Math.toRadians(45f);
+        float pitchRad = (float) Math.toRadians(32f);
+        float horiz = dist * (float) Math.cos(pitchRad);
+        float height = dist * (float) Math.sin(pitchRad);
+        float camX = player.x + horiz * (float) Math.sin(yawRad);
+        float camZ = player.y + horiz * (float) Math.cos(yawRad);
+        worldCamera.fieldOfView = 36f;
+        worldCamera.position.set(camX, height, camZ);
+        worldCamera.lookAt(player.x, 18f, player.y);
         worldCamera.up.set(0f, 1f, 0f);
         worldCamera.update();
     }

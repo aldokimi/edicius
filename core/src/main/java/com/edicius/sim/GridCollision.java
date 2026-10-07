@@ -9,10 +9,12 @@ public class GridCollision {
     }
 
     public boolean blocks(float worldX, float worldY, float halfW, float halfH) {
+        // Exclusive max edges so sitting flush on a tile boundary does not sample the next solid.
+        final float eps = 0.001f;
         float minX = worldX - halfW;
-        float maxX = worldX + halfW;
+        float maxX = worldX + halfW - eps;
         float minY = worldY - halfH;
-        float maxY = worldY + halfH;
+        float maxY = worldY + halfH - eps;
 
         int x0 = (int) Math.floor(minX / TileMap.TILE_SIZE);
         int x1 = (int) Math.floor(maxX / TileMap.TILE_SIZE);

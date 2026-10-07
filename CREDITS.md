@@ -10,8 +10,9 @@
 
 - **Kenney Topdown Shooter** (CC0) — UI previews / fallback sprites (`assets/licenses/Kenney-TopdownShooter.txt`)
 - **Kenney Sci-Fi RTS** (CC0) — tile accents (`assets/licenses/Kenney-SciFiRTS.txt`)
-- **Quaternius Sci-Fi Essentials** (CC0) — glTF units/props (`assets/licenses/Quaternius-SciFiEssentials.txt`)
-- Arena: perspective 3D, extruded walls, PBR-lit Quaternius meshes
+- **Kenney Blocky Characters** (CC0) — 3D humanoid GLB units (`assets/licenses/Kenney-BlockyCharacters.txt`)
+- **Quaternius Sci-Fi Essentials** (CC0) — 3D props (`assets/licenses/Quaternius-SciFiEssentials.txt`)
+- Arena: perspective camera, extruded walls, PBR-lit character meshes
 - VFX under `assets/runtime/vfx/`; legacy sheets under `assets/sprites/`
 
 ## Engine

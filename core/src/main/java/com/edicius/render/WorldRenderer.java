@@ -40,18 +40,22 @@ import com.edicius.sim.VfxBurst;
 import com.edicius.sim.World;
 
 /**
- * Perspective 3D arena: extruded walls, lit floors, Quaternius glTF units.
+ * Perspective 3D arena: extruded walls + Kenney Blocky GLB humanoids (PBR).
  * Sim space (x,y) maps to world (x, z) with height on Y.
  */
 public class WorldRenderer implements Disposable {
 
     public static final float WALL_H = 56f;
     private static final float FLOOR_H = 4f;
-    private static final float UNIT_SCALE = 36f;
+    /** Kenney blocky characters are ~2m tall in model space. */
+    private static final float UNIT_SCALE = 28f;
 
     private final GameAssets assets;
     private final ParticleBus particles = new ParticleBus();
-    private final ModelBatch modelBatch;
+    /** Classic materials for extruded floor/wall boxes. */
+    private final ModelBatch worldBatch = new ModelBatch();
+    /** PBR materials for glTF/GLB characters and props. */
+    private final ModelBatch unitBatch;
     private final Environment environment = new Environment();
     private final ModelBuilder modelBuilder = new ModelBuilder();
     private final Array<ModelInstance> solids = new Array<>();
@@ -67,10 +71,11 @@ public class WorldRenderer implements Disposable {
 
     public WorldRenderer(GameAssets assets) {
         this.assets = assets;
-        this.modelBatch = new ModelBatch(new PBRShaderProvider(PBRShaderProvider.createDefaultConfig()));
-        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.32f, 0.34f, 0.42f, 1f));
-        environment.add(new DirectionalLight().set(0.9f, 0.92f, 1f, -0.35f, -1f, -0.25f));
-        environment.add(new DirectionalLight().set(0.4f, 0.3f, 0.6f, 0.4f, -0.2f, 0.55f));
+        this.unitBatch = new ModelBatch(new PBRShaderProvider(PBRShaderProvider.createDefaultConfig()));
+        // Bright ambient so PBR characters read clearly without IBL
+        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.55f, 0.58f, 0.65f, 1f));
+        environment.add(new DirectionalLight().set(1f, 1f, 1f, -0.35f, -1f, -0.25f));
+        environment.add(new DirectionalLight().set(0.55f, 0.45f, 0.75f, 0.45f, -0.15f, 0.55f));
         environment.add(playerLight);
     }
 
@@ -93,14 +98,17 @@ public class WorldRenderer implements Disposable {
         bakeIfNeeded(world.getMap(), biome);
 
         Player player = world.getPlayer();
-        playerLight.set(chroma.tint.r, chroma.tint.g, chroma.tint.b, player.x, 40f, player.y, 280f);
+        playerLight.set(chroma.tint.r, chroma.tint.g, chroma.tint.b, player.x, 55f, player.y, 320f);
 
-        modelBatch.begin(camera);
+        worldBatch.begin(camera);
         for (ModelInstance m : solids) {
-            modelBatch.render(m, environment);
+            worldBatch.render(m, environment);
         }
-        drawUnitMeshes(world, chroma);
-        modelBatch.end();
+        worldBatch.end();
+
+        unitBatch.begin(camera);
+        drawUnitMeshes(world, characterId, chroma);
+        unitBatch.end();
 
         // Ground markers (telegraphs / hack) as discs on the XZ floor plane
         shapes.setProjectionMatrix(camera.combined);
@@ -201,35 +209,41 @@ public class WorldRenderer implements Disposable {
         }
     }
 
-    private void drawUnitMeshes(World world, ChromaPreset chroma) {
+    private void drawUnitMeshes(World world, String characterId, ChromaPreset chroma) {
         Player player = world.getPlayer();
         float pScale = UNIT_SCALE * (player.isInvulnerable() ? 1.08f : 1f);
-        placeMesh("player", player.x, player.y, pScale, player.aimAngleDeg, chroma.tint);
+        ModelInstance playerMesh = assets.meshes.createPlayer(characterId);
+        placeInstance(playerMesh, player.x, player.y, pScale, player.aimAngleDeg, chroma.tint, true);
 
         for (Enemy enemy : world.getEnemies()) {
             String key = enemyKey(enemy.role);
-            float scale = UNIT_SCALE * enemy.scale * (key.equals("boss") ? 1.35f : 1f);
-            if (key.equals("drone")) {
-                scale *= 0.75f;
-            }
-            placeMesh(key, enemy.x, enemy.y, scale, enemy.aimAngleDeg, roleTint(enemy.role));
+            float scale = UNIT_SCALE * enemy.scale * ("boss".equals(key) ? 1.45f : 1f);
+            ModelInstance mesh = assets.meshes.create(key);
+            placeInstance(mesh, enemy.x, enemy.y, scale, enemy.aimAngleDeg, roleTint(enemy.role), false);
         }
     }
 
-    private void placeMesh(String key, float x, float z, float scale, float aimDeg, Color tint) {
-        ModelInstance inst = assets.meshes.create(key);
+    private void placeInstance(
+            ModelInstance inst, float x, float z, float scale, float aimDeg, Color tint, boolean softTint
+    ) {
         if (inst == null) {
             return;
         }
-        inst.transform.idt()
-                .translate(x, FLOOR_H, z)
-                .rotate(Vector3.Y, -aimDeg + 180f)
-                .scale(scale, scale, scale);
-        for (Material mat : inst.materials) {
-            mat.set(PBRColorAttribute.createBaseColorFactor(
-                    new Color(tint.r, tint.g, tint.b, 1f)));
+        inst.transform.setToTranslation(x, FLOOR_H, z);
+        inst.transform.rotate(Vector3.Y, -aimDeg + 180f);
+        inst.transform.scale(scale, scale, scale);
+        if (softTint) {
+            // Mild multiply so chroma reads without wiping albedo
+            Color soft = new Color(
+                    0.55f + 0.45f * tint.r,
+                    0.55f + 0.45f * tint.g,
+                    0.55f + 0.45f * tint.b,
+                    1f);
+            for (Material mat : inst.materials) {
+                mat.set(PBRColorAttribute.createBaseColorFactor(soft));
+            }
         }
-        modelBatch.render(inst, environment);
+        unitBatch.render(inst, environment);
     }
 
     private Model box(float w, float h, float d, Texture tex, Color tint) {
@@ -294,9 +308,11 @@ public class WorldRenderer implements Disposable {
 
     private static String enemyKey(EnemyRole role) {
         return switch (role) {
-            case SHOOTER, HUNT_TARGET -> "shooter";
+            case SHOOTER -> "shooter";
+            case HUNT_TARGET -> "hunt";
             case DRONE, PATCHER -> "drone";
-            case WARDEN, ECHO, GRID_ROOT, SHIELDER -> "boss";
+            case SHIELDER -> "shielder";
+            case WARDEN, ECHO, GRID_ROOT -> "boss";
             default -> "grunt";
         };
     }
@@ -316,7 +332,8 @@ public class WorldRenderer implements Disposable {
     @Override
     public void dispose() {
         clearBake();
-        modelBatch.dispose();
+        worldBatch.dispose();
+        unitBatch.dispose();
         if (decalBatch != null) {
             decalBatch.dispose();
         }

@@ -2,6 +2,7 @@ package com.edicius.sim;
 
 import com.edicius.sim.ai.Pathfinder;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Enemy {
@@ -93,7 +94,7 @@ public class Enemy {
             float dy = ty - y;
             float len = (float) Math.sqrt(dx * dx + dy * dy);
             if (len < 6f) {
-                path = path.subList(1, path.size());
+                path = new ArrayList<>(path.subList(1, path.size()));
             } else if (len > 0.001f) {
                 float move = role.moveSpeed * speedMul;
                 float vx = dx / len * move;

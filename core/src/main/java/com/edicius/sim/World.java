@@ -25,6 +25,7 @@ public class World {
     private final Mutator mutator;
     private final Random random;
     private final List<Enemy> enemies = new ArrayList<>();
+    private final List<Enemy> pendingSpawns = new ArrayList<>();
     private final List<Projectile> projectiles = new ArrayList<>();
     private final List<Telegraph> telegraphs = new ArrayList<>();
     private final List<VfxBurst> bursts = new ArrayList<>();
@@ -44,7 +45,10 @@ public class World {
         this.room = room;
         this.mutator = mutator == null ? Mutator.NONE : mutator;
         this.random = new Random(seed);
-        this.player = new Player(map.tileCenterX(2), map.tileCenterY(2));
+
+        float[] playerPos = SpawnPoints.findNear(
+                map, collision, 2, 2, Player.HALF_W, Player.HALF_H, random);
+        this.player = new Player(playerPos[0], playerPos[1]);
         loadout.applyToPlayer(player);
         if (this.mutator == Mutator.GLASS_CANNON) {
             player.maxHp = Math.max(40, (int) (player.maxHp * 0.7f));
@@ -52,8 +56,12 @@ public class World {
             player.damageMul *= 1.35f;
         }
         holdTimer = room.holdSeconds;
-        objectiveX = map.worldWidth() * 0.5f;
-        objectiveY = map.worldHeight() * 0.5f;
+
+        float[] obj = SpawnPoints.findNear(
+                map, collision, map.width() / 2, map.height() / 2, 8f, 8f, random);
+        objectiveX = obj[0];
+        objectiveY = obj[1];
+
         spawnFromRoom();
     }
 
@@ -76,7 +84,8 @@ public class World {
                 case "gridroot" -> EnemyRole.GRID_ROOT;
                 default -> EnemyRole.WARDEN;
             };
-            enemies.add(new Enemy(bossRole, map.tileCenterX(10), map.tileCenterY(10)));
+            Enemy boss = spawnEnemyAtPreferred(bossRole, 10, 10);
+            enemies.add(boss);
             return;
         }
         spawnRole(EnemyRole.GRUNT, room.grunts);
@@ -85,7 +94,7 @@ public class World {
         spawnRole(EnemyRole.DRONE, room.drones);
         spawnRole(EnemyRole.PATCHER, room.patchers);
         if (room.type == ArenaType.HUNT) {
-            huntTarget = new Enemy(EnemyRole.HUNT_TARGET, map.tileCenterX(15), map.tileCenterY(15));
+            huntTarget = spawnEnemyAtPreferred(EnemyRole.HUNT_TARGET, 15, 15);
             huntTarget.huntMarked = true;
             enemies.add(huntTarget);
         }
@@ -94,19 +103,33 @@ public class World {
         }
     }
 
+    private Enemy spawnEnemyAtPreferred(EnemyRole role, int preferX, int preferY) {
+        float halfW = Enemy.HALF_W * (role == EnemyRole.WARDEN || role == EnemyRole.ECHO || role == EnemyRole.GRID_ROOT ? 1.8f : 1f);
+        float halfH = Enemy.HALF_H * (role == EnemyRole.WARDEN || role == EnemyRole.ECHO || role == EnemyRole.GRID_ROOT ? 1.8f : 1f);
+        float[] pos = SpawnPoints.findNear(map, collision, preferX, preferY, halfW, halfH, random);
+        return new Enemy(role, pos[0], pos[1]);
+    }
+
     private void spawnRole(EnemyRole role, int count) {
-        List<int[]> open = map.openTiles();
+        if (count <= 0) {
+            return;
+        }
         for (int i = 0; i < count; i++) {
-            int[] tile = open.get(random.nextInt(open.size()));
-            enemies.add(new Enemy(role, map.tileCenterX(tile[0]), map.tileCenterY(tile[1])));
+            float[] pos = SpawnPoints.findRandom(map, collision, Enemy.HALF_W, Enemy.HALF_H, random);
+            enemies.add(new Enemy(role, pos[0], pos[1]));
         }
     }
 
     public void spawnAdd(EnemyRole role, float x, float y) {
-        if (enemies.size() > 40) {
+        if (enemies.size() + pendingSpawns.size() > 40) {
             return;
         }
-        enemies.add(new Enemy(role, x, y));
+        float[] pos = SpawnPoints.fits(collision, x, y, Enemy.HALF_W, Enemy.HALF_H)
+                ? new float[]{x, y}
+                : SpawnPoints.findNear(map, collision,
+                (int) (x / TileMap.TILE_SIZE), (int) (y / TileMap.TILE_SIZE),
+                Enemy.HALF_W, Enemy.HALF_H, random);
+        pendingSpawns.add(new Enemy(role, pos[0], pos[1]));
     }
 
     public void spawnPlayerShot(float x, float y, float vx, float vy, int damage) {
@@ -131,10 +154,18 @@ public class World {
         }
 
         player.update(cmd, collision, dt, this);
+        unstick(player.x, player.y, Player.HALF_W, Player.HALF_H, (nx, ny) -> {
+            player.x = nx;
+            player.y = ny;
+        });
 
-        for (Enemy enemy : enemies) {
-            enemy.update(this, collision, player, dt);
+        // Snapshot size so mid-frame pending adds don't get double-updated this tick.
+        int enemyCount = enemies.size();
+        for (int i = 0; i < enemyCount; i++) {
+            enemies.get(i).update(this, collision, player, dt);
         }
+        flushPendingSpawns();
+
         for (Projectile shot : projectiles) {
             shot.update(collision, dt);
         }
@@ -153,6 +184,30 @@ public class World {
         } else {
             eventRoomClear = false;
         }
+    }
+
+    private void flushPendingSpawns() {
+        if (!pendingSpawns.isEmpty()) {
+            enemies.addAll(pendingSpawns);
+            pendingSpawns.clear();
+        }
+    }
+
+    private void unstick(float x, float y, float halfW, float halfH, FloatBiConsumer moveTo) {
+        if (!collision.blocks(x, y, halfW, halfH)) {
+            return;
+        }
+        float[] safe = SpawnPoints.findNear(
+                map, collision,
+                (int) (x / TileMap.TILE_SIZE),
+                (int) (y / TileMap.TILE_SIZE),
+                halfW, halfH, random);
+        moveTo.accept(safe[0], safe[1]);
+    }
+
+    @FunctionalInterface
+    private interface FloatBiConsumer {
+        void accept(float x, float y);
     }
 
     private void updateObjective(InputCommand cmd, float dt) {

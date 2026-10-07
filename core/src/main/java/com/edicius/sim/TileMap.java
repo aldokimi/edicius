@@ -17,12 +17,16 @@ public class TileMap {
         this.tiles = tiles;
     }
 
+    /**
+     * Loads a map written row-major in the text file (each line is Y, values are X left→right).
+     * Stored as {@code tiles[x][y]}.
+     */
     public static TileMap load(FileHandle file) {
         try (Scanner scanner = new Scanner(file.read())) {
             scanner.useLocale(Locale.US);
             int[][] data = new int[20][20];
-            for (int x = 0; x < 20; x++) {
-                for (int y = 0; y < 20; y++) {
+            for (int y = 0; y < 20; y++) {
+                for (int x = 0; x < 20; x++) {
                     if (!scanner.hasNextInt()) {
                         throw new IllegalArgumentException("Map must be 20x20 ints: " + file.path());
                     }
@@ -31,6 +35,19 @@ public class TileMap {
             }
             return new TileMap(data);
         }
+    }
+
+    /** Build from row-major lines (same convention as text maps). */
+    public static TileMap fromRows(int[][] rows) {
+        int h = rows.length;
+        int w = rows[0].length;
+        int[][] data = new int[w][h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                data[x][y] = rows[y][x];
+            }
+        }
+        return new TileMap(data);
     }
 
     public int width() {

@@ -19,9 +19,15 @@ public final class Pathfinder {
     }
 
     public static List<int[]> findPath(TileMap map, int startX, int startY, int goalX, int goalY) {
-        if (map.isSolid(startX, startY) || map.isSolid(goalX, goalY)) {
+        int[] startCell = nearestOpen(map, startX, startY);
+        int[] goalCell = nearestOpen(map, goalX, goalY);
+        if (startCell == null || goalCell == null) {
             return List.of();
         }
+        startX = startCell[0];
+        startY = startCell[1];
+        goalX = goalCell[0];
+        goalY = goalCell[1];
         if (startX == goalX && startY == goalY) {
             return List.of(new int[]{startX, startY});
         }
@@ -84,6 +90,37 @@ public final class Pathfinder {
         int dx = Math.abs(x - gx);
         int dy = Math.abs(y - gy);
         return Math.max(dx, dy) + (Math.sqrt(2) - 1) * Math.min(dx, dy);
+    }
+
+    /** If the queried cell is solid (entity clipped a wall), snap to nearest open tile. */
+    private static int[] nearestOpen(TileMap map, int x, int y) {
+        if (!map.isSolid(x, y)) {
+            return new int[]{x, y};
+        }
+        int bestDist = Integer.MAX_VALUE;
+        int[] best = null;
+        for (int r = 1; r <= 6; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dy = -r; dy <= r; dy++) {
+                    if (Math.abs(dx) != r && Math.abs(dy) != r) {
+                        continue;
+                    }
+                    int nx = x + dx;
+                    int ny = y + dy;
+                    if (!map.isSolid(nx, ny)) {
+                        int dist = Math.abs(dx) + Math.abs(dy);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            best = new int[]{nx, ny};
+                        }
+                    }
+                }
+            }
+            if (best != null) {
+                return best;
+            }
+        }
+        return null;
     }
 
     private static long key(int x, int y) {

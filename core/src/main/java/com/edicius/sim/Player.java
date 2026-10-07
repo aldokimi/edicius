@@ -137,8 +137,16 @@ public class Player {
             }
         }
 
-        tryMove(collision, vx * dt, 0f);
-        tryMove(collision, 0f, vy * dt);
+        float stepX = vx * dt;
+        float stepY = vy * dt;
+        // Sub-step long dashes so we cannot tunnel through thin walls on a single tick.
+        float dist = (float) Math.sqrt(stepX * stepX + stepY * stepY);
+        int steps = Math.max(1, (int) Math.ceil(dist / (TileMap.TILE_SIZE * 0.4f)));
+        float inv = 1f / steps;
+        for (int i = 0; i < steps; i++) {
+            tryMove(collision, stepX * inv, 0f);
+            tryMove(collision, 0f, stepY * inv);
+        }
 
         float adx = cmd.aimWorldX() - x;
         float ady = cmd.aimWorldY() - y;

@@ -102,7 +102,7 @@ public class RunSession {
     public List<Upgrade> rollUpgrades() {
         List<Upgrade> all = new ArrayList<>(List.of(Upgrade.values()));
         Collections.shuffle(all, random);
-        return all.subList(0, Math.min(3, all.size()));
+        return new ArrayList<>(all.subList(0, Math.min(3, all.size())));
     }
 
     public String resultsSummary() {

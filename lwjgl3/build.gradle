@@ -23,4 +23,29 @@ tasks.named('run') {
     ignoreExitValue = true
 }
 
+tasks.register('dist', Jar) {
+    group = 'build'
+    description = 'Desktop release jar with runtime dependencies'
+    dependsOn classes
+    archiveBaseName.set('edicius')
+    archiveClassifier.set('desktop')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+    from files(sourceSets.main.output.classesDirs)
+    from files(sourceSets.main.output.resourcesDir)
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    doLast {
+        copy {
+            from rootProject.file('assets')
+            into layout.buildDirectory.dir('dist/assets')
+        }
+        copy {
+            from archiveFile
+            into layout.buildDirectory.dir('dist')
+        }
+    }
+}
+
 eclipse.project.name = "${appName}-lwjgl3"

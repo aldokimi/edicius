@@ -33,11 +33,18 @@ public class GameInput {
         tmp.set(Gdx.input.getX(), Gdx.input.getY(), 0f);
         camera.unproject(tmp);
 
-        boolean fire = Gdx.input.isButtonPressed(Input.Buttons.LEFT);
-        boolean dash = Gdx.input.isKeyJustPressed(Input.Keys.SPACE);
-        boolean pause = Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)
-                || Gdx.input.isKeyJustPressed(Input.Keys.P);
-
-        return new InputCommand(mx, my, tmp.x, tmp.y, fire, dash, pause);
+        return new InputCommand(
+                mx,
+                my,
+                tmp.x,
+                tmp.y,
+                Gdx.input.isButtonPressed(Input.Buttons.LEFT),
+                Gdx.input.isKeyJustPressed(Input.Keys.SPACE),
+                Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) || Gdx.input.isKeyJustPressed(Input.Keys.P),
+                Gdx.input.isKeyJustPressed(Input.Keys.NUM_1),
+                Gdx.input.isKeyJustPressed(Input.Keys.NUM_2),
+                Gdx.input.isKeyJustPressed(Input.Keys.NUM_3),
+                Gdx.input.isKeyJustPressed(Input.Keys.E)
+        );
     }
 }

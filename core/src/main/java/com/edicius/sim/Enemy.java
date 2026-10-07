@@ -16,11 +16,16 @@ public class Enemy {
     public float y;
     public int hp;
     public boolean dead;
+    public boolean huntMarked;
+    public float scale = 1f;
 
     private float shootCooldown;
     private float contactCooldown;
+    private float abilityCooldown;
+    private float patchTimer;
     private List<int[]> path = List.of();
     private float repathTimer;
+    private int phase = 1;
 
     public Enemy(EnemyRole role, float x, float y) {
         this.role = role;
@@ -28,10 +33,26 @@ public class Enemy {
         this.y = y;
         this.hp = role.maxHp;
         this.shootCooldown = role.shootInterval * 0.5f;
+        if (role == EnemyRole.WARDEN || role == EnemyRole.ECHO || role == EnemyRole.GRID_ROOT) {
+            scale = 1.8f;
+            abilityCooldown = 1.5f;
+        }
+    }
+
+    public float halfW() {
+        return HALF_W * scale;
+    }
+
+    public float halfH() {
+        return HALF_H * scale;
     }
 
     public void damage(int amount) {
-        hp -= amount;
+        int dmg = amount;
+        if (role.shielded) {
+            dmg = Math.max(1, amount / 2);
+        }
+        hp -= dmg;
         if (hp <= 0) {
             dead = true;
         }
@@ -41,6 +62,16 @@ public class Enemy {
         if (dead) {
             return;
         }
+
+        float speedMul = world.getEnemySpeedMul();
+        if (role.patcher) {
+            patchTimer -= dt;
+            if (patchTimer <= 0f) {
+                buffNearby(world);
+                patchTimer = 0.75f;
+            }
+        }
+
         repathTimer -= dt;
         if (repathTimer <= 0f || path.isEmpty()) {
             int sx = (int) (x / TileMap.TILE_SIZE);
@@ -48,7 +79,7 @@ public class Enemy {
             int gx = (int) (player.x / TileMap.TILE_SIZE);
             int gy = (int) (player.y / TileMap.TILE_SIZE);
             path = Pathfinder.findPath(collision.getMap(), sx, sy, gx, gy);
-            repathTimer = 0.25f;
+            repathTimer = role == EnemyRole.DRONE ? 0.15f : 0.25f;
         }
 
         if (path.size() > 1) {
@@ -61,8 +92,9 @@ public class Enemy {
             if (len < 6f) {
                 path = path.subList(1, path.size());
             } else if (len > 0.001f) {
-                float vx = dx / len * role.moveSpeed;
-                float vy = dy / len * role.moveSpeed;
+                float move = role.moveSpeed * speedMul;
+                float vx = dx / len * move;
+                float vy = dy / len * move;
                 tryMove(collision, vx * dt, 0f);
                 tryMove(collision, 0f, vy * dt);
             }
@@ -73,7 +105,7 @@ public class Enemy {
         float dist = (float) Math.sqrt(pdx * pdx + pdy * pdy);
 
         contactCooldown = Math.max(0f, contactCooldown - dt);
-        if (dist < 28f && contactCooldown <= 0f) {
+        if (dist < 28f * scale && contactCooldown <= 0f) {
             player.damage(role.contactDamage);
             contactCooldown = 0.45f;
         }
@@ -81,10 +113,71 @@ public class Enemy {
         if (role.shootInterval > 0f) {
             shootCooldown -= dt;
             if (shootCooldown <= 0f && dist <= SHOOT_RANGE && dist > 0.001f) {
-                float sx = pdx / dist * ENEMY_SHOT_SPEED;
-                float sy = pdy / dist * ENEMY_SHOT_SPEED;
-                world.spawnEnemyShot(x, y, sx, sy);
-                shootCooldown = role.shootInterval;
+                float shotSpeed = ENEMY_SHOT_SPEED * world.getProjectileSpeedMul();
+                if (role == EnemyRole.ECHO && phase >= 2) {
+                    // mirror volley
+                    for (int i = -1; i <= 1; i++) {
+                        float a = (float) Math.atan2(pdy, pdx) + i * 0.25f;
+                        world.spawnEnemyShot(x, y, (float) Math.cos(a) * shotSpeed, (float) Math.sin(a) * shotSpeed);
+                    }
+                } else {
+                    world.spawnEnemyShot(x, y, pdx / dist * shotSpeed, pdy / dist * shotSpeed);
+                }
+                shootCooldown = role.shootInterval / speedMul;
+            }
+        }
+
+        abilityCooldown -= dt;
+        if (abilityCooldown <= 0f) {
+            useAbility(world, player);
+        }
+
+        if (role == EnemyRole.ECHO && hp < role.maxHp * 0.5f) {
+            phase = 2;
+        }
+        if (role == EnemyRole.GRID_ROOT) {
+            if (hp < role.maxHp * 0.33f) {
+                phase = 3;
+            } else if (hp < role.maxHp * 0.66f) {
+                phase = 2;
+            }
+        }
+    }
+
+    private void useAbility(World world, Player player) {
+        switch (role) {
+            case WARDEN -> {
+                world.addTelegraph(new Telegraph(player.x, player.y, 70f, 0.85f, 28));
+                abilityCooldown = 2.4f;
+            }
+            case ECHO -> {
+                world.addTelegraph(new Telegraph(x, y, 90f, 0.7f, 22));
+                abilityCooldown = 2.0f;
+            }
+            case GRID_ROOT -> {
+                world.addTelegraph(new Telegraph(player.x, player.y, 55f + phase * 10f, 0.65f, 18 + phase * 4));
+                // spawn adds on later phases
+                if (phase >= 2) {
+                    world.spawnAdd(EnemyRole.DRONE, x + 40, y);
+                }
+                if (phase >= 3) {
+                    world.spawnAdd(EnemyRole.PATCHER, x - 40, y);
+                }
+                abilityCooldown = 1.6f;
+            }
+            default -> abilityCooldown = 999f;
+        }
+    }
+
+    private void buffNearby(World world) {
+        for (Enemy other : world.getEnemies()) {
+            if (other == this || other.dead) {
+                continue;
+            }
+            float dx = other.x - x;
+            float dy = other.y - y;
+            if (dx * dx + dy * dy < 140f * 140f) {
+                other.hp = Math.min(other.role.maxHp, other.hp + 1);
             }
         }
     }
@@ -92,7 +185,7 @@ public class Enemy {
     private void tryMove(GridCollision collision, float dx, float dy) {
         float nx = x + dx;
         float ny = y + dy;
-        if (!collision.blocks(nx, ny, HALF_W, HALF_H)) {
+        if (!collision.blocks(nx, ny, halfW(), halfH())) {
             x = nx;
             y = ny;
         }

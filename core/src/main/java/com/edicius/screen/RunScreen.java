@@ -17,7 +17,9 @@ import com.edicius.sim.EnemyRole;
 import com.edicius.sim.Player;
 import com.edicius.sim.Projectile;
 import com.edicius.sim.SimClock;
+import com.edicius.sim.Telegraph;
 import com.edicius.sim.TileMap;
+import com.edicius.sim.VfxBurst;
 import com.edicius.sim.World;
 
 public class RunScreen extends ScreenAdapter {
@@ -42,7 +44,8 @@ public class RunScreen extends ScreenAdapter {
 
     @Override
     public void show() {
-        world = World.loadDefault();
+        long seed = game.session.seed ^ (game.session.roomIndex * 31L) ^ (game.session.endlessDepth * 17L);
+        world = World.forRoom(game.session.currentRoom(), game.session.loadout, game.session.activeMutator, seed);
         hudCamera.setToOrtho(false, VIEW_W, VIEW_H);
         worldCamera.setToOrtho(false, VIEW_W, VIEW_H);
         centerCamera();
@@ -55,15 +58,27 @@ public class RunScreen extends ScreenAdapter {
         while (clock.consumeTick()) {
             world.update(cmd, SimClock.TICK);
             cmd = new InputCommand(cmd.moveX(), cmd.moveY(), cmd.aimWorldX(), cmd.aimWorldY(),
-                    cmd.fire(), false, false);
+                    cmd.fire(), false, false, false, false, false, false);
         }
 
         if (world.isPlayerDead()) {
-            game.setScreen(new MainMenuScreen(game, "Total kills: " + world.getPlayer().kills));
+            game.session.loadout.syncFromPlayer(world.getPlayer());
+            game.session.failed = true;
+            game.setScreen(new ResultsScreen(game));
             return;
         }
         if (world.isCleared() && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-            game.setScreen(new MainMenuScreen(game, "Sector clear — kills: " + world.getPlayer().kills));
+            game.session.loadout.syncFromPlayer(world.getPlayer());
+            if (game.session.hasMoreRooms()) {
+                game.setScreen(new UpgradeScreen(game));
+            } else {
+                if (game.session.mode != com.edicius.run.RunSession.Mode.ENDLESS) {
+                    game.session.victory = true;
+                    game.setScreen(new ResultsScreen(game));
+                } else {
+                    game.setScreen(new UpgradeScreen(game));
+                }
+            }
             return;
         }
 
@@ -73,12 +88,17 @@ public class RunScreen extends ScreenAdapter {
 
         Gdx.gl.glClearColor(0.02f, 0.02f, 0.06f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
         worldViewport.apply();
         shapes.setProjectionMatrix(worldCamera.combined);
         shapes.begin(ShapeRenderer.ShapeType.Filled);
         drawMap();
+        drawObjective();
+        drawTelegraphs();
         drawEntities();
+        drawVfx();
         shapes.end();
 
         hudViewport.apply();
@@ -95,10 +115,18 @@ public class RunScreen extends ScreenAdapter {
 
     private void drawMap() {
         TileMap map = world.getMap();
+        boolean mirror = game.session.chapter != null && "mirror".equals(game.session.chapter.id);
+        boolean root = game.session.chapter != null && "root".equals(game.session.chapter.id);
         for (int x = 0; x < map.width(); x++) {
             for (int y = 0; y < map.height(); y++) {
                 if (map.isSolid(x, y)) {
-                    shapes.setColor(0.25f, 0.35f, 0.55f, 1f);
+                    if (mirror) {
+                        shapes.setColor(0.45f, 0.2f, 0.55f, 1f);
+                    } else if (root) {
+                        shapes.setColor(0.35f, 0.15f, 0.2f, 1f);
+                    } else {
+                        shapes.setColor(0.25f, 0.35f, 0.55f, 1f);
+                    }
                 } else {
                     shapes.setColor(0.08f, 0.1f, 0.16f, 1f);
                 }
@@ -107,18 +135,45 @@ public class RunScreen extends ScreenAdapter {
         }
     }
 
+    private void drawObjective() {
+        if (world.getRoom().type == com.edicius.sim.ArenaType.HACK) {
+            shapes.setColor(0.2f, 0.8f, 1f, 0.35f);
+            shapes.circle(world.getObjectiveX(), world.getObjectiveY(), 55f);
+        }
+    }
+
+    private void drawTelegraphs() {
+        for (Telegraph t : world.getTelegraphs()) {
+            float a = 0.15f + 0.35f * t.progress();
+            shapes.setColor(1f, 0.2f, 0.15f, a);
+            shapes.circle(t.x, t.y, t.radius);
+        }
+    }
+
+    private void drawVfx() {
+        for (VfxBurst b : world.getBursts()) {
+            float p = b.life / b.maxLife;
+            shapes.setColor(b.r, b.g, b.b, p);
+            shapes.circle(b.x, b.y, 18f * (1.2f - p));
+        }
+    }
+
     private void drawEntities() {
         Player player = world.getPlayer();
-        shapes.setColor(0.2f, 0.95f, 0.85f, 1f);
+        switch (game.meta.cosmeticTrail) {
+            case "magenta" -> shapes.setColor(0.95f, 0.3f, 0.85f, 1f);
+            case "gold" -> shapes.setColor(1f, 0.85f, 0.25f, 1f);
+            default -> shapes.setColor(0.2f, 0.95f, 0.85f, 1f);
+        }
         shapes.rect(player.x - Player.HALF_W, player.y - Player.HALF_H, Player.HALF_W * 2, Player.HALF_H * 2);
 
         for (Enemy enemy : world.getEnemies()) {
-            if (enemy.role == EnemyRole.SHOOTER) {
-                shapes.setColor(0.95f, 0.35f, 0.75f, 1f);
-            } else {
-                shapes.setColor(0.95f, 0.45f, 0.25f, 1f);
+            shapes.setColor(colorFor(enemy));
+            shapes.rect(enemy.x - enemy.halfW(), enemy.y - enemy.halfH(), enemy.halfW() * 2, enemy.halfH() * 2);
+            if (enemy.huntMarked) {
+                shapes.setColor(1f, 1f, 0.2f, 0.5f);
+                shapes.circle(enemy.x, enemy.y, 28f);
             }
-            shapes.rect(enemy.x - Enemy.HALF_W, enemy.y - Enemy.HALF_H, Enemy.HALF_W * 2, Enemy.HALF_H * 2);
         }
 
         for (Projectile shot : world.getProjectiles()) {
@@ -129,6 +184,18 @@ public class RunScreen extends ScreenAdapter {
             }
             shapes.rect(shot.x - Projectile.HALF, shot.y - Projectile.HALF, Projectile.HALF * 2, Projectile.HALF * 2);
         }
+    }
+
+    private com.badlogic.gdx.graphics.Color colorFor(Enemy enemy) {
+        return switch (enemy.role) {
+            case SHOOTER -> new com.badlogic.gdx.graphics.Color(0.95f, 0.35f, 0.75f, 1f);
+            case SHIELDER -> new com.badlogic.gdx.graphics.Color(0.4f, 0.6f, 1f, 1f);
+            case DRONE -> new com.badlogic.gdx.graphics.Color(0.6f, 1f, 0.4f, 1f);
+            case PATCHER -> new com.badlogic.gdx.graphics.Color(0.8f, 0.5f, 1f, 1f);
+            case HUNT_TARGET -> new com.badlogic.gdx.graphics.Color(1f, 0.9f, 0.2f, 1f);
+            case WARDEN, ECHO, GRID_ROOT -> new com.badlogic.gdx.graphics.Color(1f, 0.25f, 0.25f, 1f);
+            default -> new com.badlogic.gdx.graphics.Color(0.95f, 0.45f, 0.25f, 1f);
+        };
     }
 
     private void centerCamera() {

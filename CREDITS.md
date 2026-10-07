@@ -8,9 +8,10 @@
 
 ## Runtime art
 
-- **Kenney Topdown Shooter** (CC0) — character shells / enemies (`assets/licenses/Kenney-TopdownShooter.txt`)
-- **Kenney Sci-Fi RTS** (CC0) — props / accent pieces (`assets/licenses/Kenney-SciFiRTS.txt`)
-- Arena is rendered in **perspective 3D** (extruded walls, lit floors, billboard units)
+- **Kenney Topdown Shooter** (CC0) — UI previews / fallback sprites (`assets/licenses/Kenney-TopdownShooter.txt`)
+- **Kenney Sci-Fi RTS** (CC0) — tile accents (`assets/licenses/Kenney-SciFiRTS.txt`)
+- **Quaternius Sci-Fi Essentials** (CC0) — glTF units/props (`assets/licenses/Quaternius-SciFiEssentials.txt`)
+- Arena: perspective 3D, extruded walls, PBR-lit Quaternius meshes
 - VFX under `assets/runtime/vfx/`; legacy sheets under `assets/sprites/`
 
 ## Engine

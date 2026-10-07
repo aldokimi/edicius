@@ -27,7 +27,8 @@ import com.badlogic.gdx.utils.Disposable;
 import com.edicius.gfx.BiomePalette;
 import com.edicius.gfx.ChromaPreset;
 import com.edicius.gfx.GameAssets;
-import com.edicius.gfx.UnitSkin;
+import net.mgsx.gltf.scene3d.attributes.PBRColorAttribute;
+import net.mgsx.gltf.scene3d.shaders.PBRShaderProvider;
 import com.edicius.sim.ArenaType;
 import com.edicius.sim.Enemy;
 import com.edicius.sim.EnemyRole;
@@ -39,17 +40,18 @@ import com.edicius.sim.VfxBurst;
 import com.edicius.sim.World;
 
 /**
- * Perspective 3D arena: extruded walls, lit floor tiles, billboard characters.
+ * Perspective 3D arena: extruded walls, lit floors, Quaternius glTF units.
  * Sim space (x,y) maps to world (x, z) with height on Y.
  */
 public class WorldRenderer implements Disposable {
 
     public static final float WALL_H = 56f;
     private static final float FLOOR_H = 4f;
+    private static final float UNIT_SCALE = 36f;
 
     private final GameAssets assets;
     private final ParticleBus particles = new ParticleBus();
-    private final ModelBatch modelBatch = new ModelBatch();
+    private final ModelBatch modelBatch;
     private final Environment environment = new Environment();
     private final ModelBuilder modelBuilder = new ModelBuilder();
     private final Array<ModelInstance> solids = new Array<>();
@@ -65,9 +67,10 @@ public class WorldRenderer implements Disposable {
 
     public WorldRenderer(GameAssets assets) {
         this.assets = assets;
-        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.28f, 0.3f, 0.38f, 1f));
-        environment.add(new DirectionalLight().set(0.85f, 0.88f, 1f, -0.35f, -1f, -0.25f));
-        environment.add(new DirectionalLight().set(0.35f, 0.25f, 0.55f, 0.4f, -0.2f, 0.55f));
+        this.modelBatch = new ModelBatch(new PBRShaderProvider(PBRShaderProvider.createDefaultConfig()));
+        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.32f, 0.34f, 0.42f, 1f));
+        environment.add(new DirectionalLight().set(0.9f, 0.92f, 1f, -0.35f, -1f, -0.25f));
+        environment.add(new DirectionalLight().set(0.4f, 0.3f, 0.6f, 0.4f, -0.2f, 0.55f));
         environment.add(playerLight);
     }
 
@@ -96,6 +99,7 @@ public class WorldRenderer implements Disposable {
         for (ModelInstance m : solids) {
             modelBatch.render(m, environment);
         }
+        drawUnitMeshes(world, chroma);
         modelBatch.end();
 
         // Ground markers (telegraphs / hack) as discs on the XZ floor plane
@@ -118,7 +122,11 @@ public class WorldRenderer implements Disposable {
         shapes.end();
 
         ensureDecalBatch(camera);
-        drawUnitDecals(world, characterId, chroma);
+        for (Enemy enemy : world.getEnemies()) {
+            if (enemy.huntMarked) {
+                addBillboard(assets.vfxStar, enemy.x, 48f * enemy.scale, enemy.y, 28f, Color.YELLOW, 0f);
+            }
+        }
         drawProjectileDecals(world);
         drawBurstDecals(world, chroma);
         particles.drawAsDecals(decalBatch, assets, decalStrategy.getCamera().position);
@@ -181,15 +189,47 @@ public class WorldRenderer implements Disposable {
                     wall.transform.setToTranslation(cx, WALL_H * 0.5f + FLOOR_H, cz);
                     solids.add(wall);
                     wallInst[x][y] = wall;
-                } else if ((x + y * 2) % 19 == 0 && assets.propA != null) {
-                    Model prop = box(28f, 22f, 28f, assets.propA, biome.accentTint);
-                    ownedModels.add(prop);
-                    ModelInstance pi = new ModelInstance(prop);
-                    pi.transform.setToTranslation(cx, 11f + FLOOR_H, cz);
-                    solids.add(pi);
+                } else if ((x + y * 2) % 19 == 0) {
+                    ModelInstance prop = assets.meshes.create((x + y) % 2 == 0 ? "crate" : "barrel");
+                    if (prop != null) {
+                        float s = 22f;
+                        prop.transform.setToTranslation(cx, FLOOR_H, cz).scale(s, s, s);
+                        solids.add(prop);
+                    }
                 }
             }
         }
+    }
+
+    private void drawUnitMeshes(World world, ChromaPreset chroma) {
+        Player player = world.getPlayer();
+        float pScale = UNIT_SCALE * (player.isInvulnerable() ? 1.08f : 1f);
+        placeMesh("player", player.x, player.y, pScale, player.aimAngleDeg, chroma.tint);
+
+        for (Enemy enemy : world.getEnemies()) {
+            String key = enemyKey(enemy.role);
+            float scale = UNIT_SCALE * enemy.scale * (key.equals("boss") ? 1.35f : 1f);
+            if (key.equals("drone")) {
+                scale *= 0.75f;
+            }
+            placeMesh(key, enemy.x, enemy.y, scale, enemy.aimAngleDeg, roleTint(enemy.role));
+        }
+    }
+
+    private void placeMesh(String key, float x, float z, float scale, float aimDeg, Color tint) {
+        ModelInstance inst = assets.meshes.create(key);
+        if (inst == null) {
+            return;
+        }
+        inst.transform.idt()
+                .translate(x, FLOOR_H, z)
+                .rotate(Vector3.Y, -aimDeg + 180f)
+                .scale(scale, scale, scale);
+        for (Material mat : inst.materials) {
+            mat.set(PBRColorAttribute.createBaseColorFactor(
+                    new Color(tint.r, tint.g, tint.b, 1f)));
+        }
+        modelBatch.render(inst, environment);
     }
 
     private Model box(float w, float h, float d, Texture tex, Color tint) {
@@ -199,26 +239,6 @@ public class WorldRenderer implements Disposable {
         );
         return modelBuilder.createBox(w, h, d, mat,
                 VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal | VertexAttributes.Usage.TextureCoordinates);
-    }
-
-    private void drawUnitDecals(World world, String characterId, ChromaPreset chroma) {
-        Player player = world.getPlayer();
-        UnitSkin skin = assets.playerSkin(characterId);
-        Texture ptex = player.moving || player.weapon != null
-                ? (skin.armed != null ? skin.armed : skin.stand)
-                : skin.stand;
-        float pSize = 70f * (player.isInvulnerable() ? 1.1f : 1f);
-        addBillboard(ptex, player.x, pSize * 0.45f, player.y, pSize, chroma.tint, player.aimAngleDeg);
-
-        for (Enemy enemy : world.getEnemies()) {
-            UnitSkin es = assets.enemySkin(enemyKey(enemy.role));
-            Texture tex = enemy.moving && es.armed != null ? es.armed : es.stand;
-            float size = 64f * enemy.scale;
-            addBillboard(tex, enemy.x, size * 0.42f, enemy.y, size, roleTint(enemy.role), enemy.aimAngleDeg);
-            if (enemy.huntMarked) {
-                addBillboard(assets.vfxStar, enemy.x, size * 0.9f, enemy.y, 28f, Color.YELLOW, 0f);
-            }
-        }
     }
 
     private void drawProjectileDecals(World world) {

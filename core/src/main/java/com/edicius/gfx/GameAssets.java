@@ -39,7 +39,10 @@ public class GameAssets {
     public Texture mattStand;
     public Texture mattWalk;
 
+    public final MeshCatalog meshes = new MeshCatalog();
+
     public void load() {
+        meshes.load();
         for (CharacterShell shell : CharacterCatalog.SHELLS) {
             characters.put(shell.id, loadUnit(shell.standPath, shell.armedPath));
         }
@@ -113,6 +116,7 @@ public class GameAssets {
     }
 
     public void dispose() {
+        meshes.dispose();
         for (UnitSkin s : characters.values()) s.dispose();
         for (UnitSkin s : enemies.values()) s.dispose();
         dispose(floorA, floorB, wallA, wallB, accentTile, propA, propB, propC, vfxSpark, vfxStar, vfxMuzzle,

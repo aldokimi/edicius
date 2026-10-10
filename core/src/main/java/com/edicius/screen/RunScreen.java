@@ -9,11 +9,14 @@ import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.edicius.EdiciusGame;
@@ -23,6 +26,7 @@ import com.edicius.input.InputCommand;
 import com.edicius.render.BloomEffect;
 import com.edicius.render.HudRenderer;
 import com.edicius.render.WorldRenderer;
+import com.edicius.run.RunSession;
 import com.edicius.sim.Player;
 import com.edicius.sim.SimClock;
 import com.edicius.sim.World;
@@ -49,16 +53,28 @@ public class RunScreen extends ScreenAdapter {
     private final Table overlayRoot;
     private WorldRenderer worldRenderer;
     private World world;
+    private static final float CLEAR_AUTO_ADVANCE = 1.15f;
+    private static final float CLEAR_INPUT_DELAY = 0.4f;
+
     private float tipTimer = 12f;
     private boolean showTips;
     private boolean overlayBuilt;
     private boolean cameraSnapped;
+    private float clearElapsed;
+    private boolean clearAdvanced;
 
     public RunScreen(EdiciusGame game) {
         this.game = game;
         this.overlayStage = new Stage(hudViewport, game.batch);
         this.overlayRoot = new Table();
         overlayRoot.setFillParent(true);
+        // Space is dash in-run — never let it activate overlay buttons.
+        overlayStage.addListener(new InputListener() {
+            @Override
+            public boolean keyDown(InputEvent event, int keycode) {
+                return keycode == Input.Keys.SPACE;
+            }
+        });
         overlayStage.addActor(overlayRoot);
     }
 
@@ -73,11 +89,13 @@ public class RunScreen extends ScreenAdapter {
         worldCamera.viewportWidth = VIEW_W;
         worldCamera.viewportHeight = VIEW_H;
         showTips = !game.meta.tutorialSeen && game.session.roomIndex == 0
-                && game.session.mode == com.edicius.run.RunSession.Mode.CAMPAIGN
+                && game.session.mode == RunSession.Mode.CAMPAIGN
                 && game.session.chapter != null && "boot".equals(game.session.chapter.id);
         tipTimer = 12f;
         overlayBuilt = false;
         cameraSnapped = false;
+        clearElapsed = 0f;
+        clearAdvanced = false;
         centerCamera(1f);
         game.audio.startMusic();
         refreshOverlayInput();
@@ -94,6 +112,12 @@ public class RunScreen extends ScreenAdapter {
             overlayBuilt = false;
             refreshOverlayInput();
         }
+
+        // Camera must be current before pick-ray aim / camera-relative move.
+        centerCamera(Math.min(1f, delta * 6f));
+        worldCamera.update();
+        hudCamera.update();
+        worldViewport.apply();
 
         clock.accumulate(Math.min(delta, 0.25f));
         InputCommand cmd = blockingUi
@@ -124,14 +148,22 @@ public class RunScreen extends ScreenAdapter {
             game.setScreen(new ResultsScreen(game));
             return;
         }
-        if (world.isCleared() && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-            advanceAfterClear();
-            return;
+        if (world.isCleared() && !clearAdvanced) {
+            clearElapsed += delta;
+            overlayStage.setKeyboardFocus(null);
+            boolean finalRoom = !game.session.hasMoreRooms()
+                    && game.session.mode != RunSession.Mode.ENDLESS;
+            // Mid-run: auto-continue to upgrades so clearing a room never looks like "game over".
+            if (!finalRoom && clearElapsed >= CLEAR_AUTO_ADVANCE) {
+                advanceAfterClear();
+                return;
+            }
+            if (finalRoom && clearElapsed >= CLEAR_INPUT_DELAY
+                    && Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+                advanceAfterClear();
+                return;
+            }
         }
-
-        centerCamera(Math.min(1f, delta * 6f));
-        worldCamera.update();
-        hudCamera.update();
 
         String chapterId = game.session.chapter != null ? game.session.chapter.id : null;
         bloom.begin((int) VIEW_W, (int) VIEW_H);
@@ -208,15 +240,25 @@ public class RunScreen extends ScreenAdapter {
             Table panel = new Table(game.ui.skin);
             panel.setBackground("panel");
             panel.pad(28);
-            panel.add(new Label("ROOM CLEAR", game.ui.skin, "heading")).padBottom(16).row();
-            TextButton cont = new TextButton("Continue", game.ui.skin);
-            cont.addListener(new ChangeListener() {
-                @Override
-                public void changed(ChangeEvent event, Actor actor) {
-                    advanceAfterClear();
-                }
-            });
-            panel.add(cont).width(220).height(48);
+            boolean finalRoom = !game.session.hasMoreRooms()
+                    && game.session.mode != RunSession.Mode.ENDLESS;
+            String title = finalRoom ? "SECTOR CLEAR" : "ROOM CLEAR";
+            panel.add(new Label(title, game.ui.skin, "heading")).padBottom(10).row();
+            panel.add(new Label(clearProgressLabel(finalRoom), game.ui.skin, "muted")).padBottom(16).row();
+            if (finalRoom) {
+                TextButton cont = new TextButton("Raid report", game.ui.skin);
+                cont.addListener(new ClickListener() {
+                    @Override
+                    public void clicked(InputEvent event, float x, float y) {
+                        if (clearElapsed >= CLEAR_INPUT_DELAY) {
+                            advanceAfterClear();
+                        }
+                    }
+                });
+                panel.add(cont).width(220).height(48);
+            } else {
+                panel.add(new Label("Loading upgrade bay…", game.ui.skin, "accent"));
+            }
             overlayRoot.add(panel).center();
         }
         overlayBuilt = true;
@@ -230,15 +272,33 @@ public class RunScreen extends ScreenAdapter {
         refreshOverlayInput();
     }
 
+    private String clearProgressLabel(boolean finalRoom) {
+        if (game.session.mode == RunSession.Mode.ENDLESS) {
+            return "Depth " + (game.session.endlessDepth + 1) + " secured — next wave incoming";
+        }
+        if (game.session.chapter == null) {
+            return finalRoom ? "Enter for raid report" : "Next: protocol upgrade";
+        }
+        int room = game.session.roomIndex + 1;
+        int total = game.session.chapter.rooms.size();
+        if (finalRoom) {
+            return "Room " + room + " / " + total + " — sector secured";
+        }
+        return "Room " + room + " / " + total + " — next: choose an upgrade";
+    }
+
     private void advanceAfterClear() {
+        if (clearAdvanced) {
+            return;
+        }
+        clearAdvanced = true;
         game.session.loadout.syncFromPlayer(world.getPlayer());
-        if (game.session.hasMoreRooms()) {
+        if (game.session.hasMoreRooms() || game.session.mode == RunSession.Mode.ENDLESS) {
             game.setScreen(new UpgradeScreen(game));
-        } else if (game.session.mode != com.edicius.run.RunSession.Mode.ENDLESS) {
+        } else {
+            game.session.advanceRoom();
             game.session.victory = true;
             game.setScreen(new ResultsScreen(game));
-        } else {
-            game.setScreen(new UpgradeScreen(game));
         }
     }
 

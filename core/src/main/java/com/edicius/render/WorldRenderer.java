@@ -61,6 +61,8 @@ public class WorldRenderer implements Disposable {
     private final Environment environment = new Environment();
     private final ModelBuilder modelBuilder = new ModelBuilder();
     private final Array<ModelInstance> solids = new Array<>();
+    /** PBR glTF props — must not share the classic ModelBatch with floor/wall boxes. */
+    private final Array<ModelInstance> props = new Array<>();
     private final Array<Model> ownedModels = new Array<>();
     private final Matrix4 shapeXform = new Matrix4();
     private final PointLight playerLight = new PointLight();
@@ -111,6 +113,9 @@ public class WorldRenderer implements Disposable {
         worldBatch.end();
 
         unitBatch.begin(camera);
+        for (ModelInstance m : props) {
+            unitBatch.render(m, environment);
+        }
         drawUnitMeshes(world, characterId, chroma);
         unitBatch.end();
 
@@ -207,7 +212,7 @@ public class WorldRenderer implements Disposable {
                     if (prop != null) {
                         float s = 22f;
                         prop.transform.setToTranslation(cx, FLOOR_H, cz).scale(s, s, s);
-                        solids.add(prop);
+                        props.add(prop);
                     }
                 }
             }
@@ -311,6 +316,7 @@ public class WorldRenderer implements Disposable {
 
     private void clearBake() {
         solids.clear();
+        props.clear();
         for (Model m : ownedModels) {
             m.dispose();
         }

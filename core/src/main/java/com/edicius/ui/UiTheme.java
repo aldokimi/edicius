@@ -112,7 +112,9 @@ public class UiTheme implements Disposable {
         s.add("muted", muted);
         s.add("accent", accent);
 
-        s.add("panel", panel(new Color(0.04f, 0.07f, 0.14f, 0.82f), new Color(0.25f, 0.7f, 1f, 0.55f), 2));
+        // Register as Drawable so Table.setBackground("panel") resolves (not only NinePatchDrawable.class).
+        s.add("panel", panel(new Color(0.04f, 0.07f, 0.14f, 0.82f), new Color(0.25f, 0.7f, 1f, 0.55f), 2),
+                Drawable.class);
         return s;
     }
 

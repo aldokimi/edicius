@@ -1,10 +1,13 @@
 package com.edicius.ui;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.utils.viewport.FitViewport;
@@ -25,12 +28,23 @@ public abstract class MenuStageScreen extends ScreenAdapter {
         this.stage = new Stage(viewport, game.batch);
         this.root = new Table();
         root.setFillParent(true);
+        // Arrow keys are for shell/menu shortcuts — don't let Scene2D steal them for focus.
+        stage.addListener(new InputListener() {
+            @Override
+            public boolean keyDown(InputEvent event, int keycode) {
+                return keycode == Input.Keys.LEFT
+                        || keycode == Input.Keys.RIGHT
+                        || keycode == Input.Keys.UP
+                        || keycode == Input.Keys.DOWN;
+            }
+        });
         stage.addActor(root);
     }
 
     @Override
     public void show() {
         Gdx.input.setInputProcessor(stage);
+        stage.setKeyboardFocus(null);
         root.clear();
         buildUi(root);
     }

@@ -3,6 +3,8 @@ package com.edicius.screen;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
@@ -16,10 +18,18 @@ import java.util.List;
 public class UpgradeScreen extends MenuStageScreen {
 
     private final List<Upgrade> choices;
+    private boolean picked;
 
     public UpgradeScreen(EdiciusGame game) {
         super(game);
         this.choices = game.session.rollUpgrades();
+        // Space must not auto-click the focused upgrade button.
+        stage.addListener(new InputListener() {
+            @Override
+            public boolean keyDown(InputEvent event, int keycode) {
+                return keycode == Input.Keys.SPACE;
+            }
+        });
     }
 
     @Override
@@ -43,6 +53,10 @@ public class UpgradeScreen extends MenuStageScreen {
     }
 
     private void pickUpgrade(Upgrade u) {
+        if (picked) {
+            return;
+        }
+        picked = true;
         u.applier.apply(game.session.loadout);
         if (u == Upgrade.SECOND_CORE) {
             game.session.loadout.beamUnlocked = true;

@@ -83,6 +83,7 @@ public class ShellPreview implements Disposable {
             batch.end();
         }
         fbo.end();
+        Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
     }
 
     private void ensureFbo() {

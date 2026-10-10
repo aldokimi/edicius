@@ -21,6 +21,8 @@ application {
 
 tasks.named('run') {
     workingDir = rootProject.file('assets')
+    // Keep the process alive; closed stdin makes the JVM exit early under Gradle.
+    standardInput = System.in
     ignoreExitValue = true
 }
 

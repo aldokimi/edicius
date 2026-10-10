@@ -3,25 +3,44 @@ package com.edicius.input;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Camera;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.Ray;
 
+/**
+ * Twin-stick input. Movement is camera-relative so arrow/WASD match the iso view.
+ */
 public class GameInput {
 
+    private final Vector3 forward = new Vector3();
+    private final Vector3 right = new Vector3();
+
     public InputCommand poll(Camera camera) {
-        float mx = 0f;
-        float my = 0f;
+        float sx = 0f;
+        float sy = 0f;
         if (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.LEFT)) {
-            mx -= 1f;
+            sx -= 1f;
         }
         if (Gdx.input.isKeyPressed(Input.Keys.D) || Gdx.input.isKeyPressed(Input.Keys.RIGHT)) {
-            mx += 1f;
+            sx += 1f;
         }
         if (Gdx.input.isKeyPressed(Input.Keys.W) || Gdx.input.isKeyPressed(Input.Keys.UP)) {
-            my += 1f;
+            sy += 1f;
         }
         if (Gdx.input.isKeyPressed(Input.Keys.S) || Gdx.input.isKeyPressed(Input.Keys.DOWN)) {
-            my -= 1f;
+            sy -= 1f;
         }
+
+        // Screen-space intent → sim XZ using camera facing (Y-up world).
+        forward.set(camera.direction.x, 0f, camera.direction.z);
+        if (forward.len2() < 1e-6f) {
+            forward.set(0f, 0f, -1f);
+        } else {
+            forward.nor();
+        }
+        right.set(forward).crs(0f, 1f, 0f).nor(); // forward × up → camera right
+
+        float mx = right.x * sx + forward.x * sy;
+        float my = right.z * sx + forward.z * sy;
         if (mx != 0f || my != 0f) {
             float len = (float) Math.sqrt(mx * mx + my * my);
             mx /= len;
